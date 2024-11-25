@@ -1,0 +1,45 @@
+{
+    "scenes": [
+        {
+            "name": "Scene 1",
+            "meshes": [
+                {
+                    "file": "path/to/dragon_mesh.obj",
+                    "params": {
+                        "position": [0, 0, 0],
+                        "rotation": [0, 0, 0],
+                        "scale": [1, 1, 1]
+                    }
+                }
+            ],
+            "properties": {
+                "gravity": [0, -9.8, 0]
+            }
+        },
+
+        {
+            "name": "Scene 2",
+            "meshes": [
+                {
+                    "file": "path/to/teapot_mesh.obj",
+                    "params": {
+                        "position": [-1, 0, 0],
+                        "rotation": [0, 45, 0],
+                        "scale": [1, 1, 1]
+                    }
+                },
+                {
+                    "file": "path/to/loofah_mesh.obj",
+                    "params": {
+                        "position": [1, 0, 0],
+                        "rotation": [0, -45, 0],
+                        "scale": [1, 1, 1]
+                    }
+                }
+            ],
+            "properties": {
+                "gravity": [0, -9.8, 0]
+            }
+        }
+    ]
+}
