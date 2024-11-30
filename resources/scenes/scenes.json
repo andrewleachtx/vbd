@@ -4,7 +4,7 @@
             "name": "Scene 1",
             "meshes": [
                 {
-                    "file": "path/to/dragon_mesh.obj",
+                    "file": "../models/dragon.vtk",
                     "params": {
                         "position": [0, 0, 0],
                         "rotation": [0, 0, 0],
@@ -21,7 +21,7 @@
             "name": "Scene 2",
             "meshes": [
                 {
-                    "file": "path/to/teapot_mesh.obj",
+                    "file": "../models/teapot.vtk",
                     "params": {
                         "position": [-1, 0, 0],
                         "rotation": [0, 45, 0],
@@ -29,7 +29,7 @@
                     }
                 },
                 {
-                    "file": "path/to/loofah_mesh.obj",
+                    "file": "../models/loofah.vtk",
                     "params": {
                         "position": [1, 0, 0],
                         "rotation": [0, -45, 0],

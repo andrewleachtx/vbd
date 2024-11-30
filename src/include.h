@@ -24,6 +24,7 @@
 
 // CUSTOM //
 #include "include/utils/MatrixStack.h"
+#include "include/simulate/PhysicsScene.h"
 
 // UTILS //
 #include "constants.h"

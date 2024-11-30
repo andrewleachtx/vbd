@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.18)
 
 # Name of the project
 include(CheckLanguage)
-PROJECT(RIGIDBODIES LANGUAGES CXX CUDA)
+PROJECT(VBD LANGUAGES CXX CUDA)
 
 enable_language(CUDA)
 
@@ -29,6 +29,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
 # Make sure to --expt-relaxed-constexpr, otherwise bad things will happen
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G --expt-relaxed-constexpr")
+
+# Packages
+find_package(nlohmann_json CONFIG REQUIRED)
+target_link_libraries(main PRIVATE nlohmann_json::nlohmann_json)
 
 # Set the executable.
 ADD_EXECUTABLE(${CMAKE_PROJECT_NAME} ${CPP_SOURCES} ${CUDA_SOURCES} ${HEADERS} ${GLSL})
