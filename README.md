@@ -15,6 +15,8 @@ Dependencies used are
 - C++17
 - CUDA 11.8
 - nlohmann-json
+- meshio
+- tetgen
 - 
 
 
