@@ -14,10 +14,10 @@ Dependencies used are
 - CMake
 - C++17
 - CUDA 11.8
-- nlohmann-json
-- meshio
-- tetgen
-- 
+- nlohmann-json (reading scene data json in cpp)
+- meshio (reading .obj & .vtk)
+- tetgen (for tetrahedralization)
+- networkx (for greedy graph coloring)
 
 
 I use vcpkg, but you can link packages however works for you - while in the project source directory, run

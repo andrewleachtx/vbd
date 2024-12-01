@@ -16,25 +16,27 @@ import sys
 
 if len(sys.argv) < 2:
     print("Usage: python tetrahedralize.py <desired_obj> [resource_dir]")
+
     sys.exit(1)
 
-desired_obj = sys.argv[1]
-if desired_obj[-4:] != ".obj":
-    print(f"Please use a proper obj file for the desired_obj, you inputted {desired_obj}")
+INPUT_OBJ = sys.argv[1]
+if INPUT_OBJ[-4:] != ".obj":
+    print(f"Please use a proper obj file for the desired_obj, you inputted {INPUT_OBJ}")
     sys.exit(1)
 
-resource_dir = "./resources/models"
+RESOURCE_DIR = "./resources/models"
 if len(sys.argv) == 3:
-    resource_dir = sys.argv[2]
+    RESOURCE_DIR = sys.argv[2]
 
-if resource_dir[-1] != "/":
-    resource_dir += "/"
+if RESOURCE_DIR[-1] == "/":
+    RESOURCE_DIR = RESOURCE_DIR[:-1]
 
-input_file = f"{resource_dir}{desired_obj}"
-mesh = meshio.read(input_file)
+INPUT_FILE = f"{RESOURCE_DIR}/obj/{INPUT_OBJ}"
+OUTPUT_FILE = f"{RESOURCE_DIR}/vtk/{INPUT_OBJ.replace('.obj', '.vtk')}"
+mesh = meshio.read(INPUT_FILE)
 
 tgen = tetgen.TetGen(mesh.points, mesh.cells_dict["triangle"])
-tgen.tetrahedralize(order=1, mindihedral=20, minratio=1.5)
+tgen.tetrahedralize(order=1, mindihedral=20, minratio=1.5, verbose=True)
 
 tet_points = tgen.node
 tet_elements = tgen.elem
@@ -44,7 +46,6 @@ tetra_mesh = meshio.Mesh(
     cells=[("tetra", tet_elements)]
 )
 
-output_file = f"{resource_dir}{desired_obj.replace('.obj', '.vtk')}"
-meshio.write(output_file, tetra_mesh)
+meshio.write(OUTPUT_FILE, tetra_mesh)
 
-print(f"Successfully tetrahedralized {desired_obj} and stored in {output_file}")
+print(f"Successfully tetrahedralized {INPUT_OBJ} with {len(tet_elements)} tetrahedra and stored in {OUTPUT_FILE}")
