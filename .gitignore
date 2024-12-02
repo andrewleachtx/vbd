@@ -16,10 +16,14 @@ cuda-samples/
 *.mp4
 *.mp3
 *.vtk
+
 bench/*.txt
 *.ncu-rep
 
+test.py
+
 imgui/
+*.ini
 
 extra/
 build/
