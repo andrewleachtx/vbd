@@ -100,8 +100,8 @@ void MatrixStack::print(const glm::mat4 &mat, const char *name)
 	if(name) {
 		printf("%s = [\n", name);
 	}
-	for(int i = 0; i < 4; ++i) {
-		for(int j = 0; j < 4; ++j) {
+	for(int i = 0; i < 4; i++) {
+		for(int j = 0; j < 4; j++) {
 			// mat[j] returns the jth column
 			printf("%- 5.2f ", mat[j][i]);
 		}

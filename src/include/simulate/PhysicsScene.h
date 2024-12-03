@@ -4,23 +4,11 @@
 
 #include <string>
 #include <vector>
+class Mesh;
 
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
-
-
-// TODO: Move to proper mesh.h/cpp
-/*
-    For now we just need to match our per-mesh data specified in the file.
-
-    To avoid mesh duplication, we can store a meshID that corresponds to a unique int : Mesh
-*/
-struct MeshRef {
-    int underyling_meshId;
-    std::string mesh_name;
-
-};
 
 /*
     This is the heart of the program.
@@ -41,12 +29,13 @@ class PhysicsScene {
         std::string resource_dir;
         int scene_no;
         std::string state_output_dir;
-        std::vector<int> meshes;
 
-        // TODO: Each object specified in the json has its own data, we need an efficient way to store
-        std::vector<glm::vec3> positions;
-        std::vector<glm::vec3> velocities;
-        std::vector<glm::vec3> accelerations;
+        // Our scene applies the same external forces, uses the same timestep, and uses the same number of max iterations
+        
+        std::vector<Mesh> meshes;
+        glm::vec3 gravity;
+        float dt;
+        float iterations;
 };
 
 #endif // PHYSICS_SCENE_H

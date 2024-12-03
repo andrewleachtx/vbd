@@ -4,41 +4,29 @@
             "name": "Scene 1",
             "meshes": [
                 {
-                    "file": "../models/dragon.vtk",
+                    "name": "dragon",
+                    "file": "dragon_colored.vtk",
                     "params": {
                         "position": [0, 0, 0],
                         "rotation": [0, 0, 0],
-                        "scale": [1, 1, 1]
+                        "velocity": [0, 0, 0],
+                        "scale": [1, 1, 1],
+                        "mass": 1,
+                        "mu": 2e6,
+                        "lambda": 1e7,
+                        "damping": 1e-6,
+                        "k_c": 1e7,
+                        "mu_c": 0.2,
+                        "eps_c": 1e-2
                     }
                 }
             ],
             "properties": {
-                "gravity": [0, -9.8, 0]
-            }
-        },
-
-        {
-            "name": "Scene 2",
-            "meshes": [
-                {
-                    "file": "../models/teapot.vtk",
-                    "params": {
-                        "position": [-1, 0, 0],
-                        "rotation": [0, 45, 0],
-                        "scale": [1, 1, 1]
-                    }
-                },
-                {
-                    "file": "../models/loofah.vtk",
-                    "params": {
-                        "position": [1, 0, 0],
-                        "rotation": [0, -45, 0],
-                        "scale": [1, 1, 1]
-                    }
+                "gravity": [0, -9.8, 0],
+                "solver": {
+                    "h": 0.00333333333333,
+                    "iterations": 10
                 }
-            ],
-            "properties": {
-                "gravity": [0, -9.8, 0]
             }
         }
     ]

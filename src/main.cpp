@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
     int scene_no = stoi(argv[2]);
     string state_output_dir = argv[3];
 
-    PhysicsScene scene(resource_dir, scene_no, state_output_dir);
+    PhysicsScene physics(resource_dir, scene_no, state_output_dir);
 
     // Start simulation 
 
