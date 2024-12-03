@@ -42,9 +42,9 @@ void Mesh::initFromVTK(const string& vtk_file) {
     auto grid = reader->GetOutput();
 
     // Populate vertices
-    const auto vertices& = grid->GetPoints();
+    const auto& vertices = grid->GetPoints();
     printf("Attempting to load %d vertices\n", vertices->GetNumberOfPoints());
-    for (size_t i = 0; i < vertices->GetNumberOfPoints(); i++) {
+    for (auto i = 0; i < vertices->GetNumberOfPoints(); i++) {
         double* vertex = vertices->GetPoint(i);
 
         // The initial and current / deformable ones are the same at the start
@@ -59,18 +59,15 @@ void Mesh::initFromVTK(const string& vtk_file) {
 
     // Populate tets
     printf("Attempting to load %d cells\n", grid->GetCells()->GetNumberOfCells());
-    const auto cells = grid->GetCells();
-    for (size_t i = 0; i < cells->GetNumberOfCells(); i++) {
+    for (auto i = 0; i < grid->GetNumberOfCells(); i++) {
         // Attempt to get the tetrahedra
-        vtkTetra* tet = vtkTetra::SafeDownCast(cells->GetCell(i));
+        vtkTetra* tet = vtkTetra::SafeDownCast(grid->GetCell(i));
 
         if (tet) {
-            int* indices = tet->GetPointIds()->GetPointer(0);
-
-            tet_v1.push_back(indices[0]);
-            tet_v2.push_back(indices[1]);
-            tet_v3.push_back(indices[2]);
-            tet_v4.push_back(indices[3]);
+            tet_v1.push_back(tet->GetPointIds()->GetId(0));
+            tet_v2.push_back(tet->GetPointIds()->GetId(1));
+            tet_v3.push_back(tet->GetPointIds()->GetId(2));
+            tet_v4.push_back(tet->GetPointIds()->GetId(3));
         }
         else {
             cerr << "Failed to get tetrahedra at " << __FILE__ << ": " << __LINE__ << endl;

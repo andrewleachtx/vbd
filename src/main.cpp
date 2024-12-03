@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
     string state_output_dir = argv[3];
 
     PhysicsScene physics(resource_dir, scene_no, state_output_dir);
+    physics.init();
 
     // Start simulation 
-
 }

@@ -32,6 +32,11 @@ void PhysicsScene::init() {
     fin >> scenes;
     fin.close();
 
+    // Check to see the scene even exists
+    if (scene_no >= scenes["scenes"].size()) {
+        throw std::runtime_error("Scene number " + std::to_string(scene_no) + " does not exist in " + scene_file);
+    }
+
     // Load the scene-specific properties ("properties")
     json& scene_data = scenes["scenes"][scene_no];
     json& scene_props = scene_data["properties"];
@@ -40,8 +45,8 @@ void PhysicsScene::init() {
     for (size_t i = 0; i < 3; i++) {
         gravity[i] = scene_props["gravity"][i];
     }
-    dt = scene_props["solver"];
-    iterations = scene_props["iterations"];
+    dt = scene_props["solver"]["h"];
+    iterations = scene_props["solver"]["iterations"];
 
     // Create and push back meshes - we should populate both mesh info and vertices / tetrahedra
     for (const auto& scene_mesh : scene_data["meshes"]) {
@@ -50,6 +55,8 @@ void PhysicsScene::init() {
         mesh.initFromVTK(resource_dir + "/models/vtk/" + string(scene_mesh["file"]));
         meshes.push_back(mesh);
     }
+
+    cout << "Scene loaded successfully!" << endl;
 }
 
 void PhysicsScene::simulate() {

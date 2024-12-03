@@ -14,7 +14,7 @@ glm::vec3 randXYZ();
 
 // https://stackoverflow.com/questions/14038589/what-is-the-canonical-way-to-check-for-errors-using-the-cuda-runtime-api/14038590#14038590
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-__inline __host__ void gpuAssert(cudaError_t code, const char const *file, int line, 
+__inline __host__ void gpuAssert(cudaError_t code, const char *file, int line, 
                                  bool abort=true) {
    if (code != cudaSuccess) 
    {

@@ -4,8 +4,10 @@
 
 #include <string>
 #include <vector>
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
 class Mesh;
-class json;
 
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>

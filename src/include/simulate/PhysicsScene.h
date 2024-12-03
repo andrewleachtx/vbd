@@ -4,7 +4,7 @@
 
 #include <string>
 #include <vector>
-class Mesh;
+#include "Mesh.h"
 
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
@@ -31,7 +31,6 @@ class PhysicsScene {
         std::string state_output_dir;
 
         // Our scene applies the same external forces, uses the same timestep, and uses the same number of max iterations
-        
         std::vector<Mesh> meshes;
         glm::vec3 gravity;
         float dt;

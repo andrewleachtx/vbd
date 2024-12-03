@@ -30,15 +30,15 @@ set(CMAKE_CUDA_STANDARD 17)
 # Make sure to --expt-relaxed-constexpr, otherwise bad things will happen
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G --expt-relaxed-constexpr")
 
-# Packages
-find_package(nlohmann_json CONFIG REQUIRED)
-target_link_libraries(main PRIVATE nlohmann_json::nlohmann_json)
-
-find_package(VTK REQUIRED)
-target_link_libraries(main PRIVATE ${VTK_LIBRARIES})
-
 # Set the executable.
 ADD_EXECUTABLE(${CMAKE_PROJECT_NAME} ${CPP_SOURCES} ${CUDA_SOURCES} ${HEADERS} ${GLSL})
+
+# Packages
+find_package(nlohmann_json CONFIG REQUIRED)
+target_link_libraries(${CMAKE_PROJECT_NAME} nlohmann_json::nlohmann_json)
+
+find_package(VTK REQUIRED)
+target_link_libraries(${CMAKE_PROJECT_NAME} ${VTK_LIBRARIES})
 
 # Get the GLM environment variable. Since GLM is a header-only library, we
 # just need to add it to the include directory.

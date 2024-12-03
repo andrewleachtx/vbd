@@ -18,9 +18,10 @@ Dependencies used are
 - meshio (reading .obj & .vtk)
 - tetgen (for tetrahedralization)
 - networkx (for greedy graph coloring)
+- vtk
 
 
-I use vcpkg, but you can link packages however works for you - while in the project source directory, run
+I use vcpkg, but you can link packages however works for you - while in the project source directory, you can either run `./rebuild.ps1` or across environments that just runs
 `cmake -B build/ -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="C:/Dev/vcpkg/scripts/buildsystems/vcpkg.cmake"`
 
 Then, `cmake --build build/ --config Release --parallel`
