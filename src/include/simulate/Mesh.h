@@ -30,11 +30,15 @@ class Mesh {
         std::vector<glm::vec3> prev_positions;
         std::vector<glm::vec3> cur_positions;
 
-        // The only velocity we need is "previous"
-        std::vector<glm::vec3> velocities;
+        // Inertia + acceleration for the "ground truth" y
+        std::vector<glm::vec3> y;
 
-        // All tetrahedra are just int[4]
+        std::vector<glm::vec3> prev_velocities;
+        std::vector<glm::vec3> cur_velocities;
+
+        // All tetrahedra are just int[4], and we can store all tetrahedra that correspond to one vertex idx
         std::vector<std::array<int, 4>> tetrahedra;
+        std::vector<std::vector<int>> vertex2tets;
 
         // We can store the color of each vertex, and after sorting by color, the range of vertices per group
         std::vector<int> colors;
@@ -45,6 +49,9 @@ class Mesh {
         glm::vec3 position;
         glm::vec3 velocity;
         bool is_static;
+
+        void initialGuessAdaptive(float dt, const glm::vec3& a);
+        void updateVelocities(float dt);
 
         void initFromJson(const json& scene_data);
         void initFromVTK(const std::string& vtk_file);

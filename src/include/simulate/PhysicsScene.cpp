@@ -104,7 +104,7 @@ void PhysicsScene::continuousCollisionDetection() {}
         v_t vel of prev step
         a_ext external acceleration (gravity for now)
     
-    Output: this step's position & velocity x_t+1, v_t+1
+    Output: this step's position & velocity x_t+1, v_t+1 (not really an output cause void)
 */
 void PhysicsScene::stepCPU() {
     // TODO: Base this on the paper's pseudocode
@@ -121,9 +121,9 @@ void PhysicsScene::stepCPU() {
             for 2) see applyInitialStep(), storet his in "x"
                 - This is the adaptive initialization calculations of a~ to be stored in x
         */
-        // for (auto& mesh : meshes) {
-        //     mesh.applyInitialStep();
-        // }
+        for (Mesh& mesh : meshes) {
+            mesh.initialGuessAdaptive(dt, gravity);
+        }
 
         // for iter in max iterations
             // if n mod n_collision // TODO: add n_col to physics_scene then perform CCD with x
@@ -156,8 +156,16 @@ void PhysicsScene::stepCPU() {
 
             // Optionally, you can use the "accelerated" iteration
             // parallel for each vertex i do (update x_i using Eqn 18)
+        for (int iter = 0; iter < iterations; iter++) {
+            for (Mesh& mesh : meshes) {
+                
+            }
+        }
         
         // v_t = (x - x_t) / h
+        for (Mesh& mesh : meshes) {
+            mesh.updateVelocities(dt);
+        }
     }
 }
 

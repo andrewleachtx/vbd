@@ -20,6 +20,107 @@
 using std::cout, std::cerr, std::endl, std::string, std::vector, std::array, std::ifstream;
 using json = nlohmann::json;
 
+/*
+    Helper for the elastic portion of force calculation
+
+    for the ith vertex we can look at the jth tetrahedron
+    and compute the gradient of the elastic energy
+*/
+glm::vec3 Mesh::computeElasticGrad(size_t v_idx, size_t tet_idx) {
+    const std::array<int, 4>& tet = tetrahedra[tet_idx];
+    glm::vec3 x0(cur_positions[tet[0]]), x1(cur_positions[tet[1]]);
+    glm::vec3 x2(cur_positions[tet[2]]), x3(cur_positions[tet[3]]);
+
+    // Compute the gradient of the elastic energy
+    glm::vec3 grad(0.0f);
+
+    // TODO: Make it work given NeoHookean
+    return grad;
+}
+
+/*
+    f_i = - (m_i / h^2) * (xi - yi) - SUM_j (d(E_j(x)) / d(x_i))
+
+    First term is inertia, second elastic
+*/
+void Mesh::computeForces(size_t v_idx, float dt) {
+    // We can assume uniform for now, but not ideal TODO: add per vertex mass buffer
+    float m_i = mass / (float)cur_positions.size();
+    glm::vec3 f_i_inertia = (m_i / (dt * dt)) * (cur_positions[v_idx] - y[v_idx]);
+    
+    // Iterate over nearby tetrahedra (ones that are attached to vertex v_idx) for elastic forces
+    glm::vec3 f_i_elastic(0.0f);
+
+    const vector<int>& neighbors = vertex2tets[v_idx];
+    for (size_t tet_idx : neighbors) {
+        f_i_elastic += computeElasticGrad(v_idx, tet_idx);
+    }
+}
+
+void Mesh::computeHessian(size_t i,)
+
+void Mesh::doVBDCPU() {
+    // Could substep this if needed?
+
+    // Iterate over each vertex per color
+    for (int c = 0; c < color_ranges.size(); c++) { // lol c++
+        size_t start(c[0]), end(c[1]);
+        #pragma omp parallel for
+        for (int i = start; i < end; i++) {
+            // f_i is the total forces acting on the vertex
+            glm::vec3 f_i = computeForces(i);
+
+            // H_i is the Hessian of G_i 
+            glm::mat3 H_i = computeHessian(i);
+        }
+    }
+
+    
+}
+
+/*
+    Adaptive initialization with a~, store in x aka cur_position
+*/
+void Mesh::initialGuessAdaptive(float dt, const glm::vec3& a_ext) {
+    size_t num_vertices = init_positions.size();
+
+    glm::vec3 a_ext_mag = glm::length(a_ext);
+    glm::vec3 a_ext_hat = a_ext / a_ext_mag;
+
+    // We need to compute the initial guess for each vertex
+    for (size_t i = 0; i < num_vertices; i++) {
+        // a_t = (v_t - v_t-1) / h and compute component along external acceleration direction
+        // TODO: Formula 6 suggests we don't need a buffer for cur and prev velocities
+        glm::vec3 a_t = (cur_velocities[i] - prev_velocities[i]) / dt;
+        float a_t_ext = glm::dot(a_t, a_ext_hat);
+
+        // Update previous pos
+        prev_positions[i] = cur_positions[i];
+
+        float a_tilde = a_t_ext;
+        if (a_t_ext < 0.0f) {
+            a_tilde = 0.0f;
+        }
+        else if (a_t_ext > -FLOAT_EPS && a_t_ext < FLOAT_EPS) {
+            a_tilde *= a_t_ext / a_ext_mag;
+        }
+
+        // x = x_t + hv_t + h^2(a~)
+        cur_positions[i] = (cur_positions[i]) + (dt * velocities[i]) + (dt * dt * a_tilde);
+    }
+
+    // This is a little weird, but we can store this initial guess in y_positions
+    y_positions = cur_positions;
+}
+
+void Mesh::updateVelocities(float dt) {
+    for (size_t i = 0; i < cur_velocities.size(); i++) {
+        prev_velocities[i] = cur_velocities[i];
+
+        cur_velocities[i] = (cur_positions[i] - prev_positions[i]) / dt;
+    }
+}
+
 void Mesh::initFromJson(const json& mesh_data) {
     mass = mesh_data["params"]["mass"].get<float>();
     mu = mesh_data["params"]["mu"].get<float>();
@@ -48,10 +149,9 @@ void Mesh::initFromVTK(const string& vtk_file) {
     vtkIdType num_vertices = vertices->GetNumberOfPoints();
 
     // Preallocate to avoid thrashing reallocs, could also resize and use [i] but push_back does same in this context
-    init_positions.reserve(num_vertices);
-    prev_positions.reserve(num_vertices);
-    cur_positions.reserve(num_vertices);
-    velocities.reserve(num_vertices);
+    for (auto& vec : {init_positions, prev_positions, cur_positions, prev_velocities, cur_velocities, y}) {
+        vec.reserve(num_vertices);
+    }
 
     cout << "Trying to load " << num_vertices << " vertices" << endl;
     for (vtkIdType i = 0; i < num_vertices; i++) {
@@ -64,7 +164,8 @@ void Mesh::initFromVTK(const string& vtk_file) {
         init_positions.push_back(pos);
 
         // Init velocities to whatever the given initial velocity is
-        velocities.push_back(velocity);
+        prev_velocities.push_back(velocity);
+        cur_velocities.push_back(velocity);
     }
 
     // Populate tets
@@ -149,29 +250,36 @@ void Mesh::initFromVTK(const string& vtk_file) {
             old2new[old_idx] = idx;
 
             new_positions.push_back(init_positions[old_idx]);
-            new_velocities.push_back(velocities[old_idx]);
+            new_velocities.push_back(cur_velocities[old_idx]);
             new_colors.push_back(colors[old_idx]);
 
             idx++;
         }
     }
 
-    // Each vertex of a tetrahedra is old; we need to move to the new one
-    for (auto& tet : tetrahedra) {
-        for (int i = 0; i < 4; i++) {
-            tet[i] = old2new[tet[i]];
+    // Each vertex of a tetrahedra is old; we need remap
+    for (int i = 0; i < tetrahedra.size(); i++) {
+        for (int j = 0; j < 4; j++) {
+            tetrahedra[i][j] = old2new[tetrahedra[i][j]];
         }
     }
 
-    // Update prev_pos and cur_pos
-    for (int i = 0; i < num_vertices; i++) {
-        prev_positions.push_back(new_positions[i]);
-        cur_positions.push_back(new_positions[i]);
+    // We need to store one way access to all tetrahedra indices given a vertex for quick access to neighbors
+    vertex2tets.resize(num_vertices);
+    for (int i = 0; i < tetrahedra.size(); i++) {
+        for (int j = 0; j < 4; j++) {
+            vertex2tets[tetrahedra[i][j]].push_back(i);
+        }
     }
+
+    // Update prev_pos, cur_pos, and y positions
+    prev_positions = new_positions;
+    cur_positions = new_positions;
+    y = new_positions;
 
     // Swap the old arrays for the new ones
     init_positions = std::move(new_positions);
-    velocities = std::move(new_velocities);
+    cur_velocities = std::move(new_velocities);
     colors = std::move(new_colors);
 
     // For fun we can evaluate density
