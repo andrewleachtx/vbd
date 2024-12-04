@@ -59,7 +59,21 @@ void PhysicsScene::init() {
     cout << "Scene loaded successfully!" << endl;
 }
 
+void PhysicsScene::stepCPU() {
+    // TODO: Base this on the paper's pseudocode
+}
+
+/*
+    For now this will run on the CPU
+*/
 void PhysicsScene::simulate() {
-    
+    // TODO: Move max_frames to attribute
+    int cur_frame(0), max_frames(3000);
+
+    while (++cur_frame < max_frames) {
+        stepCPU();
+        // stepGPU();
+    }
+
 }
 

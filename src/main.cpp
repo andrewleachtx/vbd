@@ -25,5 +25,6 @@ int main(int argc, char** argv) {
     PhysicsScene physics(resource_dir, scene_no, state_output_dir);
     physics.init();
 
-    // Start simulation 
+    // Start simulation
+    physics.simulate()
 }

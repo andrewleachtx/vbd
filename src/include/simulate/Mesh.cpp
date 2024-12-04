@@ -37,7 +37,7 @@ void Mesh::initFromVTK(const string& vtk_file) {
     auto reader = vtkSmartPointer<vtkUnstructuredGridReader>::New();
     reader->SetFileName(vtk_file.c_str());
     reader->Update();
-    
+
     // This "grid" has points (vertices) and cells (tetrahedra) which can be accessed through getters
     auto grid = reader->GetOutput();
 

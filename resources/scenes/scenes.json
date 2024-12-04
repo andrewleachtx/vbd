@@ -5,7 +5,7 @@
             "meshes": [
                 {
                     "name": "dragon",
-                    "file": "dragon_colored.vtk",
+                    "file": "dragon_simplified_colored.vtk",
                     "params": {
                         "position": [0, 0, 0],
                         "rotation": [0, 0, 0],

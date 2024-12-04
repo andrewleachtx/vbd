@@ -34,7 +34,7 @@ python -m venv ./env
 pip install -r requirements.txt
 ```
 
-The full pipeline starts with adding `.obj` into `resources/models`, where you can then
+The full pipeline starts by adding a `.obj` into `resources/models`, where you can then
 
 1. (OPTIONAL) Simplify mesh, reducing vertice count with `python simplify.py <desired_obj> <percent> [resource_dir]` which outputs `models/obj/<desired_objname>_simplified.obj`
 2. Tetrahedralize any obj with `python tetrahedralize.py <desired_obj> [resource_dir]`.

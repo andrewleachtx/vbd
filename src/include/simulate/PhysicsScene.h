@@ -23,6 +23,8 @@ class PhysicsScene {
         ~PhysicsScene() {}
 
         void init();
+        
+        void stepCPU();
         void simulate();
 
     private:
