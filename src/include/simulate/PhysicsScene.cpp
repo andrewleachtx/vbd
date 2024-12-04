@@ -59,8 +59,106 @@ void PhysicsScene::init() {
     cout << "Scene loaded successfully!" << endl;
 }
 
+/*
+    CCD and DCD // TODO: Move to a collision.h + .cpp
+
+    Based on penetration depth d, s.t.
+
+    d = max(0, (dot(x_b - x_a, n_hat)))
+    E_c(x) = 1/2 k_c d^2
+
+    Let 
+        - k_c be the collision stiffness parameter
+        - x_a, x_b contact points on either side of the collision
+        - n_hat contact normal
+
+    Edge-edge collisions use CCD
+        - x_a, x_b are the intersection points on either edge and the contact
+          normal is the direction between them; n_hat = n / |n| where n = x_b - x_a
+    Vertex-triangle collisions are detected either with CCD or DCD
+        - x_a is the colliding vertex and x_b is the corresponding point on the collision point
+          for CCD or the closest point for DCD on the triangle's face. n_hat is the surface normal at x_b.
+*/
+struct Collision {
+    glm::vec3 x_a, x_b, n_hat;
+    float d;
+};
+
+void vertexTriangleCollision(const Mesh& mesh_a, const Mesh& mesh_b, Collision& collision) {
+    
+}
+
+void PhysicsScene::discreteCollisionDetection() {
+    // Check between all meshes if there is a vertex-triangle collision
+    for (size_t i = 0; i < meshes.size(); i++) {
+        for (size_t j = i + 1; j < meshes.size(); j++) {
+        }
+    }
+
+}
+void PhysicsScene::continuousCollisionDetection() {}
+
+/*
+    Input: 
+        x_t pos of previous step
+        v_t vel of prev step
+        a_ext external acceleration (gravity for now)
+    
+    Output: this step's position & velocity x_t+1, v_t+1
+*/
 void PhysicsScene::stepCPU() {
     // TODO: Base this on the paper's pseudocode
+
+    int max_substeps(3000);
+    for (int substep = 0; substep < max_substeps; substep++) {
+        // Do discrete collision detection
+        // discreteCollisionDetection();
+
+        /*
+            If we are "ready to solve" => "those are for CCD, to apply CCD the vertex must be inversion free in both prev position and current position"
+            then for each tet 1) evaluate external forces 2) apply initial step / guess
+
+            for 2) see applyInitialStep(), storet his in "x"
+                - This is the adaptive initialization calculations of a~ to be stored in x
+        */
+        // for (auto& mesh : meshes) {
+        //     mesh.applyInitialStep();
+        // }
+
+        // for iter in max iterations
+            // if n mod n_collision // TODO: add n_col to physics_scene then perform CCD with x
+
+            // for each vertex color / group c
+                // parallel for each vertex i in color c
+                    // parallel for each j in F_i => we can avoid the SUM( ... ) below by doing it and joining later 
+                        /*
+                            This part is more involved with Hessian, see VBDSolveParallelGroup_allInOne_kernel_V2
+
+                            f_i = - d(G_i(x)) / d(x_i)) = - (m_i / h^2) * (x_i - y_i) - SUM( d(E_j(x)) / d(x_i) )
+                            H_i (3x3) = d2(G_i(x)) / d(x_i)d(x_i) = (m_i / h^2) * I + SUM( d2(E_j(x)) / d(x_i)d(x_i) )
+
+                        */
+                        // f_ij = - d(Ej)/d(x_i)
+                        // H_ij = d2(E_j)/[d(x_i)d(x_i)]
+                    
+                    // join reduction sums
+                    // f_i = SUM_j (f_ij)
+                    // H_i = SUM_j (H_ij)
+
+                    // Solve for delta_x_i = -H_i^-1 * f_i
+                    // Perform optional line search, for now idk
+                    // x_i_new = x_i + delta_x_i
+
+                // Because x_i_new is an external buffer so other colors don't trip:
+                // parallel for each vertex i in color c do
+                    // x_i = x_i_new
+            
+
+            // Optionally, you can use the "accelerated" iteration
+            // parallel for each vertex i do (update x_i using Eqn 18)
+        
+        // v_t = (x - x_t) / h
+    }
 }
 
 /*

@@ -23,7 +23,9 @@ class PhysicsScene {
         ~PhysicsScene() {}
 
         void init();
-        
+
+        void discreteCollisionDetection();
+        void continuousCollisionDetection();
         void stepCPU();
         void simulate();
 

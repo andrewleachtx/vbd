@@ -18,20 +18,35 @@ class Mesh;
     One mesh consists of multiple vertices, and multiple tetrahedra which are loaded externally in addition
     to the vertices themself.
 
-    Highly structure of arrays with hopes of CUDA parallelization.
+    Basic SOA, but could even move towards a vector<float> pos_x, vector<float> pos_y, ... depending on what
+    the CUDA accesses look like 
 
     Material properties for the mesh are read in from the json only, hence the lack of a constructor
 */
 class Mesh {
     public:
-        std::vector<float> initpos_x, initpos_y, initpos_z;
-        std::vector<float> pos_x, pos_y, pos_z;
-        std::vector<int> tet_v1, tet_v2, tet_v3, tet_v4;
-        std::vector<int> colors;
+        // For any vertex we should store the initial position, and use a buffer for previous and current for updating
+        std::vector<glm::vec3> init_positions;
+        std::vector<glm::vec3> prev_positions;
+        std::vector<glm::vec3> cur_positions;
+        std::vector<int> old_indices;
 
+        // The only velocity we need is "previous"
+        std::vector<glm::vec3> velocities;
+
+
+        // All tetrahedra are just int[4]
+        std::vector<std::array<int, 4>> tetrahedra;
+
+        // We can store the color of each vertex, and the index of any all colors per vector[color]
+        std::vector<int> colors;
+        std::vector<std::vector<int>> color_groups;
+
+        // Now we have per mesh parameters        
         float mass, mu, lambda, damping, k_c, mu_c, eps_c;
         glm::vec3 position;
         glm::vec3 velocity;
+        bool is_static;
 
         void initFromJson(const json& scene_data);
         void initFromVTK(const std::string& vtk_file);

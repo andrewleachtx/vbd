@@ -19,6 +19,7 @@ Dependencies used are
 - tetgen (for tetrahedralization)
 - networkx (for greedy graph coloring)
 - vtk
+- paraview
 
 I use vcpkg, but you can link packages however works for you - while in the project source directory, you can either run `./rebuild.ps1` or across environments that just runs
 `cmake -B build/ -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="C:/Dev/vcpkg/scripts/buildsystems/vcpkg.cmake"`
