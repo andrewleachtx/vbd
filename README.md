@@ -20,8 +20,23 @@ Dependencies used are
 - networkx (for greedy graph coloring)
 - vtk
 
-
 I use vcpkg, but you can link packages however works for you - while in the project source directory, you can either run `./rebuild.ps1` or across environments that just runs
 `cmake -B build/ -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="C:/Dev/vcpkg/scripts/buildsystems/vcpkg.cmake"`
 
 Then, `cmake --build build/ --config Release --parallel`
+
+### Adding New Models
+Start by loading the venv with 
+
+```
+python -m venv ./env
+.\env\Scripts\activate # (on bash-like shells use source ./env/bin/activate on bash)
+pip install -r requirements.txt
+```
+
+The full pipeline starts with adding `.obj` into `resources/models`, where you can then
+
+1. (OPTIONAL) Simplify mesh, reducing vertice count with `python simplify.py <desired_obj> <percent> [resource_dir]` which outputs `models/obj/<desired_objname>_simplified.obj`
+2. Tetrahedralize any obj with `python tetrahedralize.py <desired_obj> [resource_dir]`.
+3. Graph color the tetrahedralized `.vtk` produced in 2 with `python graphcolor.py <desired_vtk> [resource_dir]`, creating `models/vtk/<desired_vtkname>_colored.vtk`.
+4. From here you can add scenes to `scene.json`, and change main.cpp based on the desired scene number. This is not fully tested.

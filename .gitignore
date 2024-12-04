@@ -5,7 +5,10 @@ glew-2.1.0/
 glfw-3.3.9/
 glm-0.9.9.8/
 cuda-samples/
+
+*env
 *.env
+
 *.vscode
 *.png
 *.jpg
