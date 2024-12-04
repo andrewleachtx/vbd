@@ -29,18 +29,16 @@ class Mesh {
         std::vector<glm::vec3> init_positions;
         std::vector<glm::vec3> prev_positions;
         std::vector<glm::vec3> cur_positions;
-        std::vector<int> old_indices;
 
         // The only velocity we need is "previous"
         std::vector<glm::vec3> velocities;
 
-
         // All tetrahedra are just int[4]
         std::vector<std::array<int, 4>> tetrahedra;
 
-        // We can store the color of each vertex, and the index of any all colors per vector[color]
+        // We can store the color of each vertex, and after sorting by color, the range of vertices per group
         std::vector<int> colors;
-        std::vector<std::vector<int>> color_groups;
+        std::vector<std::array<size_t, 2>> color_ranges;
 
         // Now we have per mesh parameters        
         float mass, mu, lambda, damping, k_c, mu_c, eps_c;

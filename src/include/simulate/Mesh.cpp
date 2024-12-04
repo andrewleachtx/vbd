@@ -62,8 +62,6 @@ void Mesh::initFromVTK(const string& vtk_file) {
         pos += position;
 
         init_positions.push_back(pos);
-        prev_positions.push_back(pos);
-        cur_positions.push_back(pos);
 
         // Init velocities to whatever the given initial velocity is
         velocities.push_back(velocity);
@@ -87,6 +85,8 @@ void Mesh::initFromVTK(const string& vtk_file) {
             cerr << "Failed to get tetrahedra at " << __FILE__ << ": " << __LINE__ << endl;
         }
     }
+
+    std::vector<std::vector<int>> color_groups;
 
     // Try to get per vertex colors
     auto vtk_colors = grid->GetPointData()->GetScalars("color");
@@ -128,18 +128,25 @@ void Mesh::initFromVTK(const string& vtk_file) {
         make very inefficient calls to the main arrays. So instead we can just reorder
         the array by color, such that we really have [new_vidx0, new_vidx1, new_vidx2]
 
-        old_indices[new_idx] = old_idx, so we have a way back if we need it
+        Incase we need it
+            old_indices[new_idx] = old_idx
+            new_indices[old_idx] = new_idx
     */
     vector<glm::vec3> new_positions, new_velocities;
     vector<int> new_colors;
-    old_indices.resize(num_vertices);
+    vector<int> old2new(num_vertices);
+
+    new_positions.reserve(num_vertices);
+    new_velocities.reserve(num_vertices);
+    new_colors.reserve(num_vertices);
 
     size_t idx = 0;
-    cout << "Reordering vertices based on color" << endl;
+    cout << "Reordering vertices based on color for cache efficiency" << endl;
     for (int color = 0; color < color_groups.size(); color++) {
         for (int i = 0; i < color_groups[color].size(); i++) {
             int old_idx = color_groups[color][i];
-            old_indices[old_idx] = idx;
+
+            old2new[old_idx] = idx;
 
             new_positions.push_back(init_positions[old_idx]);
             new_velocities.push_back(velocities[old_idx]);
@@ -149,11 +156,50 @@ void Mesh::initFromVTK(const string& vtk_file) {
         }
     }
 
+    // Each vertex of a tetrahedra is old; we need to move to the new one
+    for (auto& tet : tetrahedra) {
+        for (int i = 0; i < 4; i++) {
+            tet[i] = old2new[tet[i]];
+        }
+    }
+
+    // Update prev_pos and cur_pos
+    for (int i = 0; i < num_vertices; i++) {
+        prev_positions.push_back(new_positions[i]);
+        cur_positions.push_back(new_positions[i]);
+    }
+
     // Swap the old arrays for the new ones
     init_positions = std::move(new_positions);
     velocities = std::move(new_velocities);
     colors = std::move(new_colors);
-        
+
+    // For fun we can evaluate density
+    vector<float> color_freq(color_groups.size());
+    for (int i = 0; i < color_groups.size(); i++) {
+        color_freq[i] = (float)color_groups[i].size();
+    }
+
+    cout << "Ideal vertices per group = " << ((float)num_vertices / color_groups.size()) << " versus actual: ";
+    for (int i = 0; i < color_freq.size(); i++) {
+        cout << color_freq[i] << " ";
+    }
+    cout << endl;
+
+    // Calculate color ranges. This is coming along so nicely!
+    size_t start_idx = 0;
+    color_ranges.reserve(color_groups.size());
+    for (int color = 0; color < color_groups.size(); color++) {
+        size_t group_sz = color_groups[color].size();
+        color_ranges.push_back({start_idx, start_idx + group_sz});
+        start_idx += group_sz;
+    }
+
+    // Print color ranges
+    for (int i = 0; i < color_ranges.size(); i++) {
+        cout << "Color " << i << ": " << "[" << color_ranges[i][0] << ", " << color_ranges[i][1] << ")" << endl;
+    }
+
     // Sanity check
     assert(init_positions.size() == num_vertices);
     assert(velocities.size() == num_vertices);
