@@ -39,6 +39,8 @@ class Mesh {
         // All tetrahedra are just int[4], and we can store all tetrahedra that correspond to one vertex idx
         std::vector<std::array<int, 4>> tetrahedra;
         std::vector<std::vector<int>> vertex2tets;
+        std::vector<glm::mat3> Dm_inverses;
+        std::vector<float> tet_volumes;
 
         // We can store the color of each vertex, and after sorting by color, the range of vertices per group
         std::vector<int> colors;
@@ -49,6 +51,15 @@ class Mesh {
         glm::vec3 position;
         glm::vec3 velocity;
         bool is_static;
+
+        void 
+
+        glm::vec3 computeEnergyFirstOrder(size_t v_idx, size_t tet_idx);
+        glm::mat3 computeEnergySecondOrder(size_t v_idx, size_t tet_idx);
+        glm::vec3 computeForces(size_t v_idx, float dt);
+        glm::mat3 computeHessian(size_t v_idx, float dt);
+
+        void doVBDCPU(float dt);
 
         void initialGuessAdaptive(float dt, const glm::vec3& a);
         void updateVelocities(float dt);

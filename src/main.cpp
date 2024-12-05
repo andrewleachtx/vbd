@@ -26,5 +26,5 @@ int main(int argc, char** argv) {
     physics.init();
 
     // Start simulation
-    // physics.simulate();
+    physics.simulate();
 }

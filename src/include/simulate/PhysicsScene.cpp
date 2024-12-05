@@ -109,7 +109,7 @@ void PhysicsScene::continuousCollisionDetection() {}
 void PhysicsScene::stepCPU() {
     // TODO: Base this on the paper's pseudocode
 
-    int max_substeps(3000);
+    int max_substeps(10);
     for (int substep = 0; substep < max_substeps; substep++) {
         // Do discrete collision detection
         // discreteCollisionDetection();
@@ -124,6 +124,7 @@ void PhysicsScene::stepCPU() {
         for (Mesh& mesh : meshes) {
             mesh.initialGuessAdaptive(dt, gravity);
         }
+        cout << "Done with initial guess!" << endl;
 
         // for iter in max iterations
             // if n mod n_collision // TODO: add n_col to physics_scene then perform CCD with x
@@ -158,7 +159,7 @@ void PhysicsScene::stepCPU() {
             // parallel for each vertex i do (update x_i using Eqn 18)
         for (int iter = 0; iter < iterations; iter++) {
             for (Mesh& mesh : meshes) {
-                
+                mesh.doVBDCPU(dt);
             }
         }
         
@@ -174,7 +175,7 @@ void PhysicsScene::stepCPU() {
 */
 void PhysicsScene::simulate() {
     // TODO: Move max_frames to attribute
-    int cur_frame(0), max_frames(3000);
+    int cur_frame(0), max_frames(10);
 
     while (++cur_frame < max_frames) {
         stepCPU();
