@@ -31,6 +31,7 @@ imgui/
 extra/
 build/
 out/
+output/
 .vs/
 *.zip
 *.tar.gz

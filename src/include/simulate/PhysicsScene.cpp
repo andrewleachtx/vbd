@@ -5,6 +5,7 @@
 #include <nlohmann/json.hpp>
 #include <omp.h>
 
+#include "../utils/utils.h"
 #include "Mesh.h"
 
 using std::cout, std::cerr, std::endl, std::string, std::vector, std::array, std::ifstream;
@@ -56,7 +57,14 @@ void PhysicsScene::init() {
         meshes.push_back(mesh);
     }
 
-    cout << "Scene loaded successfully!" << endl;
+    // For output purposes, we start at frame 0
+    frame = 0;
+    cout << "Scene loaded successfully! Parameters:" << endl;
+    cout << "\tGravity: " << gravity.x << " " << gravity.y << " " << gravity.z << endl;
+    cout << "\tTimestep: " << dt << endl;
+    cout << "\tIterations: " << iterations << endl;
+    cout << "\tMeshes: " << meshes.size() << endl;
+    cout << "\tOutput directory: " << state_output_dir << endl;
 }
 
 /*
@@ -107,9 +115,10 @@ void PhysicsScene::continuousCollisionDetection() {}
     Output: this step's position & velocity x_t+1, v_t+1 (not really an output cause void)
 */
 void PhysicsScene::stepCPU() {
-    // TODO: Base this on the paper's pseudocode
-
     int max_substeps(10);
+    float sim_dt = dt / max_substeps;
+    // scenes.json "h": 0.00333333333333
+
     for (int substep = 0; substep < max_substeps; substep++) {
         // Do discrete collision detection
         // discreteCollisionDetection();
@@ -122,8 +131,10 @@ void PhysicsScene::stepCPU() {
                 - This is the adaptive initialization calculations of a~ to be stored in x
         */
         for (Mesh& mesh : meshes) {
-            mesh.initialGuessAdaptive(dt, gravity);
+            mesh.initialGuess(sim_dt, gravity);
         }
+        printvec3(meshes[0].prev_positions[0]);
+        printvec3(meshes[0].y[0]);
         cout << "Done with initial guess!" << endl;
 
         // for iter in max iterations
@@ -159,13 +170,19 @@ void PhysicsScene::stepCPU() {
             // parallel for each vertex i do (update x_i using Eqn 18)
         for (int iter = 0; iter < iterations; iter++) {
             for (Mesh& mesh : meshes) {
-                mesh.doVBDCPU(dt);
+                // string filename = state_output_dir + "/frame_" + std::to_string(frame++) + ".vtu";
+
+                // cout << "Starting write to " << filename << endl;
+                // mesh.writeToVTK(filename);
+                // cout << "Finishing write to " << filename << endl;
+
+                mesh.doVBDCPU(sim_dt);
             }
         }
         
         // v_t = (x - x_t) / h
         for (Mesh& mesh : meshes) {
-            mesh.updateVelocities(dt);
+            mesh.updateVelocities(sim_dt);
         }
     }
 }
@@ -175,12 +192,17 @@ void PhysicsScene::stepCPU() {
 */
 void PhysicsScene::simulate() {
     // TODO: Move max_frames to attribute
-    int cur_frame(0), max_frames(10);
+    int max_frames(100);
 
-    while (++cur_frame < max_frames) {
+    while (++frame < max_frames) {
         stepCPU();
         // stepGPU();
-    }
 
+        string filename = state_output_dir + "/frame_" + std::to_string(frame) + ".vtu";
+
+        cout << "Starting write to " << filename << endl;
+        meshes[0].writeToVTK(filename, false);
+        cout << "Finishing write to " << filename << endl;
+    }
 }
 

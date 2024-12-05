@@ -23,8 +23,12 @@ int main(int argc, char** argv) {
     string state_output_dir = argv[3];
 
     PhysicsScene physics(resource_dir, scene_no, state_output_dir);
+    cout << "[STARTING INITIALIZATION]" << endl;
     physics.init();
+    cout << "[INITIALIZATION COMPLETE!]" << endl;
 
     // Start simulation
+    cout << "[STARTING SIMULATION]" << endl;
     physics.simulate();
+    cout << "[SIMULATION COMPLETE!]" << endl;
 }

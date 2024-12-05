@@ -10,6 +10,8 @@
 // https://examples.vtk.org/site/Cxx/
 #include <vtk-9.3/vtkSmartPointer.h>
 #include <vtk-9.3/vtkUnstructuredGridReader.h>
+#include <vtk-9.3/vtkXMLUnstructuredGridWriter.h>
+#include <vtk-9.3/vtkUnstructuredGridWriter.h>
 #include <vtk-9.3/vtkUnstructuredGrid.h>
 #include <vtk-9.3/vtkPointData.h>
 #include <vtk-9.3/vtkCellData.h>
@@ -20,174 +22,41 @@
 using std::cout, std::cerr, std::endl, std::string, std::vector, std::array, std::ifstream;
 using json = nlohmann::json;
 
-/*
-    Helper for the elastic portion of the local energy first order calculation, which is the second
-    part of equation (8)
-*/
-glm::vec3 Mesh::computeEnergyFirstOrder(size_t v_idx, size_t tet_idx) {
-    const std::array<int, 4>& tet = tetrahedra[tet_idx];
+glm::vec3 Mesh::computeEnergyFirstOrder(size_t v_idx, size_t tet_idx) { return glm::vec3(0.0f); }
+glm::mat3 Mesh::computeEnergySecondOrder(size_t v_idx, size_t tet_idx) { return glm::mat3(0.0f); }
 
-    glm::vec3 x0 = cur_positions[tet[0]];
-    glm::vec3 x1 = cur_positions[tet[1]];
-    glm::vec3 x2 = cur_positions[tet[2]];
-    glm::vec3 x3 = cur_positions[tet[3]];
+void Mesh::writeToVTK(const string& output_dir, bool raw) {
+    vtkSmartPointer<vtkPoints> vtk_points = vtkSmartPointer<vtkPoints>::New();
+    for (const auto& pos : cur_positions) {
+        vtk_points->InsertNextPoint(pos.x, pos.y, pos.z);
+    }
 
-    // F = Ds * Dm_inv where Ds is the current and deformed shape matrix and Dm_inv is the inverse of the rest state
-    glm::mat3 Ds;
-    Ds[0] = x1 - x0;
-    Ds[1] = x2 - x0;
-    Ds[2] = x3 - x0;
-
-    const glm::mat3& Dm_inv = Dm_inverses[tet_idx];
-    glm::mat3 F = Ds * Dm_inv;
-
-    // Piola-Kirchhoff stress tensor P = mu * (F - F_it) + lm * (log(J) * FinvT)
-    glm::mat3 F_it = glm::transpose(glm::inverse(F));
-    float J = glm::determinant(F);
-
-    glm::mat3 P = mu * (F - F_it) + lambda * (log(J) * F_it);
-
-    /*
-        Elastic force at the ith vertice is fi = -V_0 * (P * grad_N_i) where
-
-        N_i represents the shape function that interpolates displacement in the tetrahedron. We can
-        use grad(N_i) to get the gradient of the shape function. Basically, when the shape is very
-        deformed, the force will be very large and accentuated in the direction of the deformation.
-
-        //TODO: There is also another way to implement this, see VBD_NeoHookean.h/inline void computeElasticEnergy(int tetId, T& energy)
-    */
-
-    glm::mat3 Dm_it = glm::transpose(Dm_inv);
-    float V0 = tet_volumes[tet_idx];
-
-    // !FIXME: This is pretty awful, but only way to work with my input, please change
-    glm::vec3 grad_N0 = Dm_it[0] - Dm_it[1] - Dm_it[2];
-    glm::vec3 grad_N1 = Dm_it[0];
-    glm::vec3 grad_N2 = Dm_it[1];
-    glm::vec3 grad_N3 = Dm_it[2];
+    vtkSmartPointer<vtkCellArray> vtk_cells = vtkSmartPointer<vtkCellArray>::New();
+    for (const auto& tet : tetrahedra) {
+        vtkSmartPointer<vtkTetra> vtkTet = vtkSmartPointer<vtkTetra>::New();
+        vtkTet->GetPointIds()->SetId(0, tet[0]);
+        vtkTet->GetPointIds()->SetId(1, tet[1]);
+        vtkTet->GetPointIds()->SetId(2, tet[2]);
+        vtkTet->GetPointIds()->SetId(3, tet[3]);
+        vtk_cells->InsertNextCell(vtkTet);
+    }
     
-    glm::vec3 f0 = -V0 * (P * grad_N0);
-    glm::vec3 f1 = -V0 * (P * grad_N1);
-    glm::vec3 f2 = -V0 * (P * grad_N2);
-    glm::vec3 f3 = -V0 * (P * grad_N3);
+    vtkSmartPointer<vtkUnstructuredGrid> vtk_mesh = vtkSmartPointer<vtkUnstructuredGrid>::New();
+    vtk_mesh->SetPoints(vtk_points);
+    vtk_mesh->SetCells(VTK_TETRA, vtk_cells);
 
-    if (v_idx == tet[0]) {
-        return f0;
+    if (raw) {
+        vtkSmartPointer<vtkUnstructuredGridWriter> raw_writer = vtkSmartPointer<vtkUnstructuredGridWriter>::New();
+        raw_writer->SetFileName(output_dir.substr(0, output_dir.size() - 4).append("_raw.vtu").c_str());
+        raw_writer->SetInputData(vtk_mesh);
+        raw_writer->Write();
     }
-    else if (v_idx == tet[1]) {
-        return f1;
+    else {
+        vtkSmartPointer<vtkXMLUnstructuredGridWriter> writer = vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
+        writer->SetFileName(output_dir.c_str());
+        writer->SetInputData(vtk_mesh);
+        writer->Write();
     }
-    else if (v_idx == tet[2]) {
-        return f2;
-    }
-    else if (v_idx == tet[3]) {
-        return f3;
-    }
-
-    return glm::vec3(0.0f);
-}
-
-/*
-    This is specifically to be used as for the elastic energy calculation summation
-    in the Hessian computation, or the second part of equation (9)
-*/
-glm::mat3 Mesh::computeEnergySecondOrder(size_t v_idx, size_t tet_idx) {
-    const std::array<int, 4>& tet = tetrahedra[tet_idx];
-
-    glm::vec3 x0 = cur_positions[tet[0]];
-    glm::vec3 x1 = cur_positions[tet[1]];
-    glm::vec3 x2 = cur_positions[tet[2]];
-    glm::vec3 x3 = cur_positions[tet[3]];
-
-    // F = Ds * Dm_inv where Ds is the current and deformed shape matrix and Dm_inv is the inverse of the rest state
-    glm::mat3 Ds;
-    Ds[0] = x1 - x0;
-    Ds[1] = x2 - x0;
-    Ds[2] = x3 - x0;
-
-    const glm::mat3& Dm_inv = Dm_inverses[tet_idx];
-    glm::mat3 F = Ds * Dm_inv;
-
-    // Piola-Kirchhoff stress tensor P = mu * (F - F_it) + lm * (log(J) * FinvT)
-    glm::mat3 F_it = glm::transpose(glm::inverse(F));
-    float J = glm::determinant(F);
-    glm::mat3 P = mu * (F - F_it) + lambda * (log(J) * F_it);
-
-    glm::mat3 Dm_it = glm::transpose(Dm_inv);
-    float V0 = tet_volumes[tet_idx];
-
-    glm::vec3 grad_N0 = Dm_it[0] - Dm_it[1] - Dm_it[2];
-    glm::vec3 grad_N1 = Dm_it[0];
-    glm::vec3 grad_N2 = Dm_it[1];
-    glm::vec3 grad_N3 = Dm_it[2];
-
-    // Compute material tangent stiffness tensor C (9x9 matrix as it is 3x3 for each vertex)
-    glm::mat3 dF_dxi;
-    if (v_idx == tet[0]) {
-        dF_dxi = -glm::outerProduct(glm::vec3(1.0f), grad_N0);
-    }
-    else if (v_idx == tet[1]) {
-        dF_dxi = glm::outerProduct(glm::vec3(1.0f), grad_N1);
-    }
-    else if (v_idx == tet[2]) {
-        dF_dxi = glm::outerProduct(glm::vec3(1.0f), grad_N2);
-    }
-    else if (v_idx == tet[3]) {
-        dF_dxi = glm::outerProduct(glm::vec3(1.0f), grad_N3);
-    }
-
-    // Compute adjugate of F
-    glm::mat3 adjF = glm::transpose(F);
-
-    // Flatten adjF into ddetF_dF
-    float ddetF_dF[9] = {
-        adjF[0][0], adjF[1][0], adjF[2][0],
-        adjF[0][1], adjF[1][1], adjF[2][1],
-        adjF[0][2], adjF[1][2], adjF[2][2]
-    };
-
-    // Initialize C
-    float C[9][9] = {0};
-
-    // Compute C = lambda * (ddetF_dF * ddetF_dF^T)
-    for (int i = 0; i < 9; ++i) {
-        for (int j = 0; j < 9; ++j) {
-            C[i][j] = lambda * ddetF_dF[i] * ddetF_dF[j];
-        }
-    }
-
-    // Add mu to diagonal elements
-    for (int i = 0; i < 9; ++i) {
-        C[i][i] += mu;
-    }
-
-    // H_i = d(F)/d(x_i)^T * ( C * d(F)/d(x_i) )
-    // Flatten dF_dxi into a 9-element vector
-    float dF_dxi_vec9[9] = {
-        dF_dxi[0][0], dF_dxi[1][0], dF_dxi[2][0],
-        dF_dxi[0][1], dF_dxi[1][1], dF_dxi[2][1],
-        dF_dxi[0][2], dF_dxi[1][2], dF_dxi[2][2]
-    };
-
-    // Compute CdF_dxi = C * dF_dxi_vec9
-    float CdF_dxi[9] = {0};
-    for (int i = 0; i < 9; ++i) {
-        for (int j = 0; j < 9; ++j) {
-            CdF_dxi[i] += C[i][j] * dF_dxi_vec9[j];
-        }
-    }
-
-    // Compute H_i_scalar = dF_dxi_vec9^T * CdF_dxi
-    float H_i_scalar = 0.0f;
-    for (int i = 0; i < 9; ++i) {
-        H_i_scalar += dF_dxi_vec9[i] * CdF_dxi[i];
-    }
-
-    H_i_scalar *= V0;
-
-    glm::mat3 H_i_elastic = H_i_scalar * glm::mat3(1.0f);
-
-    return H_i_elastic;
 }
 
 /*
@@ -197,7 +66,8 @@ glm::mat3 Mesh::computeEnergySecondOrder(size_t v_idx, size_t tet_idx) {
 */
 glm::vec3 Mesh::computeForces(size_t v_idx, float dt) {
     // We can assume uniform for now, but not ideal TODO: add per vertex mass buffer
-    float m_i = mass / (float)cur_positions.size();
+    //float m_i = mass / (float)cur_positions.size();
+    float m_i = mass;
     glm::vec3 f_i_inertia = (m_i / (dt * dt)) * (cur_positions[v_idx] - y[v_idx]);
     
     // Iterate over nearby tetrahedra (ones that are attached to vertex v_idx) for elastic forces
@@ -212,7 +82,8 @@ glm::vec3 Mesh::computeForces(size_t v_idx, float dt) {
 }
 
 glm::mat3 Mesh::computeHessian(size_t v_idx, float dt) {
-    float m_i = mass / (float)cur_positions.size();
+    //float m_i = mass / (float)cur_positions.size();
+    float m_i = mass;
     glm::mat3 H_i_inertia = (m_i / (dt * dt)) * glm::mat3(1.0f);
 
     // Second term is the sum of Hessians of the force elements wrt v_idx
@@ -222,6 +93,7 @@ glm::mat3 Mesh::computeHessian(size_t v_idx, float dt) {
     for (size_t tet_idx : neighbors) {
         // TODO: If this is too complex, use an approximation of energy = (mu + lambda) * V0
         H_i_elastic += computeEnergySecondOrder(v_idx, tet_idx);
+        // H_i_elastic += (mu + lambda) * tet_volumes[tet_idx] * glm::mat3(1.0f);
     }
 
     return H_i_inertia + H_i_elastic;
@@ -232,12 +104,11 @@ void Mesh::doVBDCPU(float dt) {
 
     // Iterate over each vertex per color
     vector<glm::vec3> x_new(cur_positions.size());
-    for (int c = 0; c < color_ranges.size(); c++) { // lol c++
+    for (size_t c = 0; c < color_ranges.size(); c++) { // lol c++
         size_t start(color_ranges[c][0]), end(color_ranges[c][1]);
 
-        cout << "Starting loop with color range " << start << " to " << end << endl;
         #pragma omp parallel for
-        for (int i = start; i < end; i++) {
+        for (size_t i = start; i < end; i++) {
             // f_i is the total forces acting on the vertex
             glm::vec3 f_i = computeForces(i, dt);
 
@@ -245,6 +116,11 @@ void Mesh::doVBDCPU(float dt) {
             glm::mat3 H_i = computeHessian(i, dt);
 
             // Solve for delta_x_i = -H_i^-1 * f_i
+            float det_H_i = glm::determinant(H_i);
+            if (std::abs(det_H_i) < FLOAT_EPS) {
+                H_i += FLOAT_EPS * glm::mat3(1.0f);
+            }
+
             glm::vec3 delta_x_i = -glm::inverse(H_i) * f_i;
             
             // Perform optional line search, for now idk
@@ -260,38 +136,61 @@ void Mesh::doVBDCPU(float dt) {
 }
 
 /*
-    Adaptive initialization with a~, store in x aka cur_position
+    The paper presents four options,
+
+    a) Previous position
+    b) Inertia
+    c) Inertia and acceleration
+    d) Adaptive initialization with a~, store in x aka cur_position
+
+    After some struggle getting adaptive acceleration working, I have decided to leave it
+    but as a parameter of "initGuessType" to choose what you use.
 */
-void Mesh::initialGuessAdaptive(float dt, const glm::vec3& a_ext) {
+void Mesh::initialGuess(float dt, const glm::vec3& a_ext) {
     size_t num_vertices = init_positions.size();
 
-    float a_ext_mag = glm::length(a_ext);
-    glm::vec3 a_ext_hat = a_ext / a_ext_mag;
+    if (initGuessType == initGuessEnum::ADAPTIVE) {
+        float a_ext_mag = glm::length(a_ext);
+        glm::vec3 a_ext_hat = a_ext / a_ext_mag;
 
-    // We need to compute the initial guess for each vertex
-    for (size_t i = 0; i < num_vertices; i++) {
-        // a_t = (v_t - v_t-1) / h and compute component along external acceleration direction
-        // TODO: Formula 6 suggests we don't need a buffer for cur and prev velocities
-        glm::vec3 a_t = (cur_velocities[i] - prev_velocities[i]) / dt;
-        float a_t_ext = glm::dot(a_t, a_ext_hat);
+        // We need to compute the initial guess for each vertex
+        for (size_t i = 0; i < num_vertices; i++) {
+            // a_t = (v_t - v_t-1) / h and compute component along external acceleration direction
+            // TODO: Formula 6 suggests we don't need a buffer for cur and prev velocities
+            glm::vec3 a_t = (cur_velocities[i] - prev_velocities[i]) / dt;
+            float a_t_ext = glm::dot(a_t, a_ext_hat);
 
-        // Update previous pos
-        prev_positions[i] = cur_positions[i];
+            // Update previous pos
+            prev_positions[i] = cur_positions[i];
 
-        float a_tilde = a_t_ext;
-        if (a_t_ext < 0.0f) {
-            a_tilde = 0.0f;
+            float a_coef;
+            if (a_t_ext > a_ext_mag) {
+                a_coef = 1.0f;
+            }
+            else if (a_t_ext < 0.0f) {
+                a_coef = 0.0f;
+            }
+            else {
+                a_coef = a_t_ext / a_ext_mag;
+            }
+
+            glm::vec3 a_tilde = a_coef * a_ext;
+
+            // x = x_t + hv_t + h^2(a~)
+            cur_positions[i] += (dt * cur_velocities[i]) + (dt * dt * a_tilde);
+            y[i] = cur_positions[i];
         }
-        else if (a_t_ext > -FLOAT_EPS && a_t_ext < FLOAT_EPS) {
-            a_tilde *= a_t_ext / a_ext_mag;
-        }
-
-        // x = x_t + hv_t + h^2(a~)
-        cur_positions[i] = (cur_positions[i]) + (dt * cur_velocities[i]) + (dt * dt * a_tilde);
     }
-
-    // This is a little weird, but we can store this initial guess in y
-    y = cur_positions;
+    else if (initGuessType == initGuessEnum::INERTIA_ACCEL) {
+        for (size_t i = 0; i < num_vertices; i++) {
+            // y = x = x_t + hv_t + h^2a_ext 
+            cur_positions[i] = prev_positions[i] + (dt * cur_velocities[i]) + (dt * dt * a_ext);
+            y[i] = cur_positions[i];
+            
+            // Update previous pos
+            prev_positions[i] = cur_positions[i];
+        }
+    }
 }
 
 void Mesh::updateVelocities(float dt) {
@@ -315,6 +214,20 @@ void Mesh::initFromJson(const json& mesh_data) {
         position[i] = mesh_data["params"]["position"][i];
         velocity[i] = mesh_data["params"]["velocity"][i];
     }
+
+    // Assume initial guess type is always inertia + accel
+    initGuessType = initGuessEnum::INERTIA_ACCEL;
+
+    cout << "Parameters:" << endl;
+    cout << "\tmass: " << mass << endl;
+    cout << "\tmu: " << mu << endl;
+    cout << "\tlambda: " << lambda << endl;
+    cout << "\tdamping: " << damping << endl;
+    cout << "\tk_c: " << k_c << endl;
+    cout << "\tmu_c: " << mu_c << endl;
+    cout << "\teps_c: " << eps_c << endl;
+    cout << "\tposition: " << position.x << " " << position.y << " " << position.z << endl;
+    cout << "\tvelocity: " << velocity.x << " " << velocity.y << " " << velocity.z << endl;
 }
 
 void Mesh::initFromVTK(const string& vtk_file) {
@@ -476,6 +389,10 @@ void Mesh::initFromVTK(const string& vtk_file) {
         Dm_inverses[i] = glm::inverse(Dm);
 
         float vol = glm::determinant(Dm) / 6.0f;
+        // if (fabsf(vol) < FLOAT_EPS) {
+        //     cout << "Degenerate tetrahedron " << i << " has zero volume, exiting" << endl;
+        //     throw std::runtime_error("Degenerate tetrahedron detected");
+        // }
         tet_volumes[i] = vol;
     }
 
@@ -512,7 +429,7 @@ void Mesh::initFromVTK(const string& vtk_file) {
 
     // Print color ranges
     for (int i = 0; i < color_ranges.size(); i++) {
-        cout << "Color " << i << ": " << "[" << color_ranges[i][0] << ", " << color_ranges[i][1] << ")" << endl;
+        cout << "\tColor " << i << ": " << "[" << color_ranges[i][0] << ", " << color_ranges[i][1] << ")" << endl;
     }
 
     // Sanity check

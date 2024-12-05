@@ -52,7 +52,14 @@ class Mesh {
         glm::vec3 velocity;
         bool is_static;
 
-        void 
+        enum initGuessEnum {
+            INERTIA_ACCEL,
+            ADAPTIVE
+        };
+
+        initGuessEnum initGuessType;
+
+        void writeToVTK(const std::string& output_dir, bool raw=false);
 
         glm::vec3 computeEnergyFirstOrder(size_t v_idx, size_t tet_idx);
         glm::mat3 computeEnergySecondOrder(size_t v_idx, size_t tet_idx);
@@ -61,7 +68,7 @@ class Mesh {
 
         void doVBDCPU(float dt);
 
-        void initialGuessAdaptive(float dt, const glm::vec3& a);
+        void initialGuess(float dt, const glm::vec3& a);
         void updateVelocities(float dt);
 
         void initFromJson(const json& scene_data);

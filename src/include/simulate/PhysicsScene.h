@@ -39,6 +39,8 @@ class PhysicsScene {
         glm::vec3 gravity;
         float dt;
         float iterations;
+
+        size_t frame;
 };
 
 #endif // PHYSICS_SCENE_H
