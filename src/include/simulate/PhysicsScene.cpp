@@ -116,7 +116,7 @@ void PhysicsScene::continuousCollisionDetection() {}
     Output: this step's position & velocity x_t+1, v_t+1 (not really an output cause void)
 */
 void PhysicsScene::stepCPU() {
-    int max_substeps(10);
+    int max_substeps(1);
     float sim_dt = dt / max_substeps;
     // scenes.json "h": 0.00333333333333
 
@@ -134,7 +134,7 @@ void PhysicsScene::stepCPU() {
         for (Mesh& mesh : meshes) {
             mesh.initialGuess(sim_dt, gravity);
         }
-        printvec3(meshes[0].y[0]);
+        printvec3(meshes[0].cur_positions[0]);
         // cout << "Done with initial guess!" << endl;
 
         // for iter in max iterations
@@ -194,7 +194,16 @@ void PhysicsScene::simulate() {
     // TODO: Move max_frames to attribute
     int max_frames(100);
 
+    // Perturb one vertex
+    // meshes[0].cur_positions[0] += randXYZ();
+
     while (++frame < max_frames) {
+        string filename = state_output_dir + "/frame_" + std::to_string(frame) + ".vtu";
+
+        cout << "Starting write to " << filename << endl;
+        meshes[0].writeToVTK(filename, false);
+        cout << "Finishing write to " << filename << endl;
+
         auto start = std::chrono::high_resolution_clock::now();
         stepCPU();
         auto stop = std::chrono::high_resolution_clock::now();
@@ -202,12 +211,6 @@ void PhysicsScene::simulate() {
         cout << "Frame " << frame << " took " << step_wallTime << " seconds" << endl;
 
         // stepGPU();
-
-        string filename = state_output_dir + "/frame_" + std::to_string(frame) + ".vtu";
-
-        cout << "Starting write to " << filename << endl;
-        meshes[0].writeToVTK(filename, false);
-        cout << "Finishing write to " << filename << endl;
     }
 }
 

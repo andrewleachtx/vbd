@@ -54,13 +54,19 @@ void Mesh::computeElasticEnergyGradients(size_t v_idx, size_t tet_idx, glm::vec3
     // Deformed shape matrix Ds and constant shape reference
     glm::mat3 Ds = glm::mat3(x0 - x3, x1 - x3, x2 - x3);
     const glm::mat3& Dm_i = Dm_inverses[tet_idx];
-    
+
     // Compute F = Ds * Dm^-1
     glm::mat3 F = Ds * Dm_i;
     if (fabs(glm::determinant(F)) < FLOAT_EPS) {
         return;
     }
     
+    if (tet_idx == 0) {
+        printmat3(Ds);
+        printmat3(Dm_i);
+        printmat3(F);
+    }
+
     glm::mat3 F_t = glm::transpose(F);
     glm::mat3 F_it = glm::transpose(glm::inverse(F));
     float I3 = glm::determinant(F);
@@ -91,15 +97,26 @@ void Mesh::computeElasticEnergyGradients(size_t v_idx, size_t tet_idx, glm::vec3
     */
 
     glm::mat3 dP_dF = mu * glm::mat3(1.0f) 
-                - mu * glm::inverse(F) 
-                + lambda * (log(I3) * glm::mat3(1.0f) + (1.0f / I3) * glm::inverse(F));
+                + lambda * log(I3) * glm::inverse(F) 
+                + lambda * (glm::inverse(F) * glm::inverse(F));
     hessian += dP_dF * Dm_i;    
+}
+
+/*
+    Solves a linear system Ax = b for x with adj
+*/
+glm::vec3 solveLinear(const glm::mat3& A, const glm::vec3& b) {
+    float detA = glm::determinant(A);
+    if (fabs(detA) < FLOAT_EPS) {
+        return glm::vec3(0.0f);
+    }
+
+    glm::mat3 adjA = glm::transpose(glm::inverse(A)) * detA;
+    return adjA * b / (detA * detA);
 }
 
 // TODO: Pass in inversed dt and dtdt to reduce overhead
 void Mesh::doVBDCPU(float dt) {
-    // Could substep this if needed?
-
     // Iterate over each vertex per color
     vector<glm::vec3> x_new(cur_positions.size());
     for (size_t c = 0; c < color_ranges.size(); c++) { // lol c++
@@ -129,6 +146,7 @@ void Mesh::doVBDCPU(float dt) {
             glm::vec3 f_i_elastic(0.0f);
             glm::mat3 H_i_elastic(0.0f);
             for (size_t tet_idx : neighbors) {
+                // f_i_elastic and H_i_elastic are pass by ref so they accumulate
                 computeElasticEnergyGradients(i, tet_idx, f_i_elastic, H_i_elastic);
             }
 
@@ -136,8 +154,8 @@ void Mesh::doVBDCPU(float dt) {
             H_i += H_i_elastic;
 
             // Solve for delta_x_i = -H_i^-1 * f_i
-            if (fabs(glm::determinant(H_i)) > FLOAT_EPS) {
-                const glm::vec3 delta_x_i = glm::inverse(H_i) * f_i;
+            if (glm::determinant(H_i) > FLOAT_EPS) {
+                const glm::vec3 delta_x_i = solveLinear(H_i, f_i);
 
                 x_new[i] = cur_positions[i] + delta_x_i;
             }
@@ -196,25 +214,21 @@ void Mesh::initialGuess(float dt, const glm::vec3& a_ext) {
             glm::vec3 a_tilde = a_coef * a_ext;
 
             // x = x_t + hv_t + h^2(a~)
+            y[i] = cur_positions[i] + (dt * cur_velocities[i]) + (dt * dt * a_ext);
             cur_positions[i] += (dt * cur_velocities[i]) + (dt * dt * a_tilde);
-            y[i] = cur_positions[i];
         }
     }
     else if (initGuessType == initGuessEnum::INERTIA_ACCEL) {
         for (size_t i = 0; i < num_vertices; i++) {
             // y = x = x_t + hv_t + h^2a_ext 
-            cur_positions[i] = prev_positions[i] + (dt * cur_velocities[i]) + (dt * dt * a_ext);
-            y[i] = cur_positions[i];
-            
-            // Update previous pos
-            prev_positions[i] = cur_positions[i];
+            y[i] = cur_positions[i] + (dt * cur_velocities[i]) + (dt * dt * a_ext);
+            cur_positions[i] = y[i];
         }
     }
 }
 
 void Mesh::updateVelocities(float dt) {
     for (size_t i = 0; i < cur_velocities.size(); i++) {
-        prev_velocities[i] = cur_velocities[i];
         cur_velocities[i] = (cur_positions[i] - prev_positions[i]) / dt;
     }
 }
@@ -421,6 +435,16 @@ void Mesh::initFromVTK(const string& vtk_file) {
         }
     }
 
+    // Update prev_pos, cur_pos, and y positions
+    prev_positions = new_positions;
+    cur_positions = new_positions;
+    y = new_positions;
+
+    // Swap the old arrays for the new ones
+    init_positions = std::move(new_positions);
+    cur_velocities = std::move(new_velocities);
+    colors = std::move(new_colors);
+
     // Precalculate relevant tetrahedron data
     Dm_inverses.resize(tetrahedra.size());
     tet_volumes.resize(tetrahedra.size());
@@ -446,16 +470,6 @@ void Mesh::initFromVTK(const string& vtk_file) {
         }
         tet_volumes[i] = vol;
     }
-
-    // Update prev_pos, cur_pos, and y positions
-    prev_positions = new_positions;
-    cur_positions = new_positions;
-    y = new_positions;
-
-    // Swap the old arrays for the new ones
-    init_positions = std::move(new_positions);
-    cur_velocities = std::move(new_velocities);
-    colors = std::move(new_colors);
 
     // For fun we can evaluate density
     vector<float> color_freq(color_groups.size());

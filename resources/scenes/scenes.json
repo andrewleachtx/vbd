@@ -9,7 +9,7 @@
                     "params": {
                         "position": [0, 0, 0],
                         "rotation": [0, 0, 0],
-                        "velocity": [0, 0, 0],
+                        "velocity": [0, -0.2, 0],
                         "scale": [1, 1, 1],
                         "mass": 1,
                         "mu": 2e6,
@@ -24,7 +24,7 @@
             "properties": {
                 "gravity": [0, -9.8, 0],
                 "solver": {
-                    "h": 0.2,
+                    "h": 0.05,
                     "iterations": 10
                 }
             }
