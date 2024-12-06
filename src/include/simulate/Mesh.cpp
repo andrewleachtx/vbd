@@ -20,13 +20,16 @@
 #include <vtk-9.3/vtkCellArray.h>
 #include <vtk-9.3/vtkTetra.h>
 
+#include <TinyAD/VectorFunction.hh>
+#include <TinyAD/ScalarFunction.hh>
+#include <TinyAD/Scalar.hh>
+
 using std::cout, std::cerr, std::endl, std::string, std::vector, std::array, std::ifstream;
 using json = nlohmann::json;
 
-// TODO: Pass in inversed dt and dtdt to reduce overhead
 void Mesh::doVBDCPU(float dt) {
     float inv_dt = 1.0f / dt;
-    float inv_dt2 = inv_dt * inv_dt;
+    float inv_dtdt = inv_dt * inv_dt;
     size_t num_vertices = cur_positions.size();
     vector<Eigen::Vector3f> x_new(num_vertices, Eigen::Vector3f::Zero());
 
@@ -47,10 +50,11 @@ void Mesh::doVBDCPU(float dt) {
             Eigen::Vector3f f_i_elastic = Eigen::Vector3f::Zero();
             Eigen::Matrix3f H_i_elastic = Eigen::Matrix3f::Zero();
 
-            const vector<int>& neighbors = vertex2tets[i];
-            for (const int& tet_idx : neighbors) {
-                computeElasticEnergyGradients(dt, i, tet_idx, f_i_elastic, H_i_elastic);
-            }
+            // We want to optimize this vertex update across all connected tetrahedra with TinyAD
+
+            // const vector<int>& neighbors = vertex2tets[i];
+            // for (const int& tet_idx : neighbors) {
+            // }
 
             f_i += f_i_elastic;
             H_i += H_i_elastic;
@@ -68,11 +72,60 @@ void Mesh::doVBDCPU(float dt) {
         // Update the positions
         #pragma omp parallel for
         for (int i = start; i < end; i++) {
-            prev_positions[i] = cur_positions[i];
             cur_positions[i] = x_new[i];
         }
     }
 }
+
+// void Mesh::doVBDCPU(float dt) {
+//     float inv_dt = 1.0f / dt;
+//     float inv_dtdt = inv_dt * inv_dt;
+//     size_t num_vertices = cur_positions.size();
+//     vector<Eigen::Vector3f> x_new(num_vertices, Eigen::Vector3f::Zero());
+
+//     // Per color group batch now
+//     for (size_t c = 0; c < color_ranges.size(); c++) { // lol c++
+//         size_t start(color_ranges[c][0]), end(color_ranges[c][1]);
+
+//         #pragma omp parallel for
+//         for (size_t i = start; i < end; i++) {
+//             /*
+//                 f_i (8) and H_i (9)
+//             */
+
+//             Eigen::Vector3f f_i = - (mass * inv_dtdt) * (cur_positions[i] - y[i]);
+//             Eigen::Matrix3f H_i = (mass * inv_dtdt) * Eigen::Matrix3f::Identity();
+
+//             // Accumulate elastic contributions from all tetrahedra neighboring the current vertex
+//             Eigen::Vector3f f_i_elastic = Eigen::Vector3f::Zero();
+//             Eigen::Matrix3f H_i_elastic = Eigen::Matrix3f::Zero();
+
+//             const vector<int>& neighbors = vertex2tets[i];
+//             for (const int& tet_idx : neighbors) {
+//                 computeElasticEnergyGradients(dt, i, tet_idx, f_i_elastic, H_i_elastic);
+//             }
+
+//             f_i += f_i_elastic;
+//             H_i += H_i_elastic;
+
+//             if (H_i.determinant() > FLOAT_EPS) {
+//                 const Eigen::Vector3f delta_xi = -H_i.inverse() * f_i;
+
+//                 x_new[i] = cur_positions[i] + delta_xi;
+//             }
+//             else {
+//                 x_new[i] = cur_positions[i];
+//             }
+//         }
+
+//         // Update the positions
+//         #pragma omp parallel for
+//         for (int i = start; i < end; i++) {
+//             prev_positions[i] = cur_positions[i];
+//             cur_positions[i] = x_new[i];
+//         }
+//     }
+// }
 
 /*
     The paper presents four options,
@@ -90,7 +143,7 @@ void Mesh::initialGuess(float dt, const Eigen::Vector3f& a_ext) {
 
     if (initGuessType == initGuessEnum::ADAPTIVE) {
         float a_ext_mag = a_ext.norm();
-        Eigen::Vector3f a_ext_hat = Eigen::Vector3f(0.0f);
+        Eigen::Vector3f a_ext_hat = Eigen::Vector3f::Zero();
         if (a_ext_mag > FLOAT_EPS) {
             a_ext_hat = a_ext / a_ext_mag;
         }
@@ -132,9 +185,10 @@ void Mesh::initialGuess(float dt, const Eigen::Vector3f& a_ext) {
     }
 }
 
-inline void Mesh::updateVelocities(float dt) {
+void Mesh::updateVelocities(float dt) {
     float inv_dt = 1.0f / dt;
     for (size_t i = 0; i < cur_velocities.size(); i++) {
+        prev_velocities[i] = cur_velocities[i];
         cur_velocities[i] = (cur_positions[i] - prev_positions[i]) * inv_dt;
     }
 }
@@ -387,9 +441,8 @@ void Mesh::initFromVTK(const string& vtk_file) {
         Dm.col(1) = x1 - x3;
         Dm.col(2) = x2 - x3;
 
-        Dm_inverses[i] = glm::inverse(Dm);
-
-        float vol = fabs(glm::determinant(Dm) / 6.0f);
+        Dm_inverses[i] = Dm.inverse();
+        float vol = fabs(Dm.determinant() / 6.0f);
         // if (fabs(vol) < FLOAT_EPS) {
         //     cout << "Degenerate tetrahedron " << i << " has zero volume" << endl;
         // }
@@ -417,7 +470,7 @@ void Mesh::initFromVTK(const string& vtk_file) {
         size_t group_sz = color_groups[color].size();
 
         // Apparently emplace back is better for on the fly construction push back
-        color_ranges.emplace_back({start_idx, start_idx + group_sz});
+        color_ranges.emplace_back(std::array<size_t, 2>{start_idx, start_idx + group_sz});
         start_idx += group_sz;
     }
 

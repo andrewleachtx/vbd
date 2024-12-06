@@ -43,10 +43,11 @@ void PhysicsScene::init() {
     json& scene_data = scenes["scenes"][scene_no];
     json& scene_props = scene_data["properties"];
 
-    // glm::vec3[1] == glm::vec3.y
-    for (size_t i = 0; i < 3; i++) {
-        gravity[i] = scene_props["gravity"][i];
-    }
+    gravity = Eigen::Vector3f(
+        scene_props["gravity"][0].get<float>(),
+        scene_props["gravity"][1].get<float>(),
+        scene_props["gravity"][2].get<float>()
+    );
     dt = scene_props["solver"]["h"];
     iterations = scene_props["solver"]["iterations"];
 
@@ -57,11 +58,11 @@ void PhysicsScene::init() {
         mesh.initFromVTK(resource_dir + "/models/vtk/" + string(scene_mesh["file"]));
         meshes.push_back(mesh);
     }
-
+    
     // For output purposes, we start at frame 0
     frame = 0;
     cout << "Scene loaded successfully! Parameters:" << endl;
-    cout << "\tGravity: " << gravity.x << " " << gravity.y << " " << gravity.z << endl;
+    printvec3(gravity);
     cout << "\tTimestep: " << dt << endl;
     cout << "\tIterations: " << iterations << endl;
     cout << "\tMeshes: " << meshes.size() << endl;
@@ -88,14 +89,6 @@ void PhysicsScene::init() {
         - x_a is the colliding vertex and x_b is the corresponding point on the collision point
           for CCD or the closest point for DCD on the triangle's face. n_hat is the surface normal at x_b.
 */
-struct Collision {
-    glm::vec3 x_a, x_b, n_hat;
-    float d;
-};
-
-void vertexTriangleCollision(const Mesh& mesh_a, const Mesh& mesh_b, Collision& collision) {
-    
-}
 
 void PhysicsScene::discreteCollisionDetection() {
     // Check between all meshes if there is a vertex-triangle collision
@@ -195,7 +188,7 @@ void PhysicsScene::simulate() {
     int max_frames(100);
 
     // Perturb one vertex
-    meshes[0].cur_positions[0] += randXYZ();
+    // meshes[0].cur_positions[0] += randXYZ();
 
     while (++frame < max_frames) {
         string filename = state_output_dir + "/frame_" + std::to_string(frame) + ".vtu";
