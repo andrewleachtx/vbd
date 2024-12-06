@@ -6,9 +6,7 @@
 #include <vector>
 #include "Mesh.h"
 
-#define GLM_FORCE_RADIANS
-#include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
+#include <Eigen/Dense>
 
 /*
     This is the heart of the program.
@@ -36,7 +34,7 @@ class PhysicsScene {
 
         // Our scene applies the same external forces, uses the same timestep, and uses the same number of max iterations
         std::vector<Mesh> meshes;
-        glm::vec3 gravity;
+        Eigen::Vector3f gravity;
         float dt;
         float iterations;
 

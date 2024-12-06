@@ -195,7 +195,7 @@ void PhysicsScene::simulate() {
     int max_frames(100);
 
     // Perturb one vertex
-    // meshes[0].cur_positions[0] += randXYZ();
+    meshes[0].cur_positions[0] += randXYZ();
 
     while (++frame < max_frames) {
         string filename = state_output_dir + "/frame_" + std::to_string(frame) + ".vtu";

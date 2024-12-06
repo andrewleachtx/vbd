@@ -39,6 +39,9 @@ target_link_libraries(${CMAKE_PROJECT_NAME} nlohmann_json::nlohmann_json)
 
 find_package(VTK REQUIRED)
 target_link_libraries(${CMAKE_PROJECT_NAME} ${VTK_LIBRARIES})
+# eigen
+find_package(Eigen3 REQUIRED)
+target_link_libraries(${CMAKE_PROJECT_NAME} Eigen3::Eigen)
 
 # Get the GLM environment variable. Since GLM is a header-only library, we
 # just need to add it to the include directory.
