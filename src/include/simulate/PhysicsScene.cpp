@@ -4,6 +4,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <omp.h>
+#include <chrono>
 
 #include "../utils/utils.h"
 #include "Mesh.h"
@@ -133,9 +134,8 @@ void PhysicsScene::stepCPU() {
         for (Mesh& mesh : meshes) {
             mesh.initialGuess(sim_dt, gravity);
         }
-        printvec3(meshes[0].prev_positions[0]);
         printvec3(meshes[0].y[0]);
-        cout << "Done with initial guess!" << endl;
+        // cout << "Done with initial guess!" << endl;
 
         // for iter in max iterations
             // if n mod n_collision // TODO: add n_col to physics_scene then perform CCD with x
@@ -158,7 +158,7 @@ void PhysicsScene::stepCPU() {
                     // H_i = SUM_j (H_ij)
 
                     // Solve for delta_x_i = -H_i^-1 * f_i
-                    // Perform optional line search, for now idk
+                    // Perform optional line search, but idk for now + paper said it was eh
                     // x_i_new = x_i + delta_x_i
 
                 // Because x_i_new is an external buffer so other colors don't trip:
@@ -195,7 +195,12 @@ void PhysicsScene::simulate() {
     int max_frames(100);
 
     while (++frame < max_frames) {
+        auto start = std::chrono::high_resolution_clock::now();
         stepCPU();
+        auto stop = std::chrono::high_resolution_clock::now();
+        double step_wallTime = std::chrono::duration<double>(stop - start).count();
+        cout << "Frame " << frame << " took " << step_wallTime << " seconds" << endl;
+
         // stepGPU();
 
         string filename = state_output_dir + "/frame_" + std::to_string(frame) + ".vtu";

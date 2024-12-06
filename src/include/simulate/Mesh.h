@@ -59,18 +59,14 @@ class Mesh {
 
         initGuessEnum initGuessType;
 
-        void writeToVTK(const std::string& output_dir, bool raw=false);
-
-        glm::vec3 computeEnergyFirstOrder(size_t v_idx, size_t tet_idx);
-        glm::mat3 computeEnergySecondOrder(size_t v_idx, size_t tet_idx);
-        glm::vec3 computeForces(size_t v_idx, float dt);
-        glm::mat3 computeHessian(size_t v_idx, float dt);
+        void computeElasticEnergyGradients(size_t v_idx, size_t tet_idx, glm::vec3& force, glm::mat3& hessian);
 
         void doVBDCPU(float dt);
 
         void initialGuess(float dt, const glm::vec3& a);
         void updateVelocities(float dt);
 
+        void writeToVTK(const std::string& output_dir, bool raw=false);
         void initFromJson(const json& scene_data);
         void initFromVTK(const std::string& vtk_file);
 };

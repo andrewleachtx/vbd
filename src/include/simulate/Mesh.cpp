@@ -22,83 +22,81 @@
 using std::cout, std::cerr, std::endl, std::string, std::vector, std::array, std::ifstream;
 using json = nlohmann::json;
 
-glm::vec3 Mesh::computeEnergyFirstOrder(size_t v_idx, size_t tet_idx) { return glm::vec3(0.0f); }
-glm::mat3 Mesh::computeEnergySecondOrder(size_t v_idx, size_t tet_idx) { return glm::mat3(0.0f); }
-
-void Mesh::writeToVTK(const string& output_dir, bool raw) {
-    vtkSmartPointer<vtkPoints> vtk_points = vtkSmartPointer<vtkPoints>::New();
-    for (const auto& pos : cur_positions) {
-        vtk_points->InsertNextPoint(pos.x, pos.y, pos.z);
-    }
-
-    vtkSmartPointer<vtkCellArray> vtk_cells = vtkSmartPointer<vtkCellArray>::New();
-    for (const auto& tet : tetrahedra) {
-        vtkSmartPointer<vtkTetra> vtkTet = vtkSmartPointer<vtkTetra>::New();
-        vtkTet->GetPointIds()->SetId(0, tet[0]);
-        vtkTet->GetPointIds()->SetId(1, tet[1]);
-        vtkTet->GetPointIds()->SetId(2, tet[2]);
-        vtkTet->GetPointIds()->SetId(3, tet[3]);
-        vtk_cells->InsertNextCell(vtkTet);
-    }
-    
-    vtkSmartPointer<vtkUnstructuredGrid> vtk_mesh = vtkSmartPointer<vtkUnstructuredGrid>::New();
-    vtk_mesh->SetPoints(vtk_points);
-    vtk_mesh->SetCells(VTK_TETRA, vtk_cells);
-
-    if (raw) {
-        vtkSmartPointer<vtkUnstructuredGridWriter> raw_writer = vtkSmartPointer<vtkUnstructuredGridWriter>::New();
-        raw_writer->SetFileName(output_dir.substr(0, output_dir.size() - 4).append("_raw.vtu").c_str());
-        raw_writer->SetInputData(vtk_mesh);
-        raw_writer->Write();
-    }
-    else {
-        vtkSmartPointer<vtkXMLUnstructuredGridWriter> writer = vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
-        writer->SetFileName(output_dir.c_str());
-        writer->SetInputData(vtk_mesh);
-        writer->Write();
-    }
-}
-
 /*
-    f_i = - (m_i / h^2) * (xi - yi) - SUM_j (d(E_j(x)) / d(x_i))
+    Calculates grad(psi(x)) and grad^2(psi(x)), the first and second order gradients of the energy function
+    psi(x) for some vertex v_idx and tetrahedron tet_idx.
 
-    First term is inertia, second elastic
+    As the shape deforms, we accumulate elastic energy along with our external and collision
+    energies. This can be represented as psi(x), which is basically elastic + external + collision
+    energy.
+
+    grad(psi(x)) represents the direction that would reduce the energy the most. The first order
+    derivative of psi(x) is that gradient, and the second order derivative is the Hessian.
+
+    In VBD_NeoHookean.cpp
+    - Vec9 dE_dF = A * (miu * dPhi_D_dF + (lmbd * detF - lmbd - miu) * ddetF_dF);
+        - dE_dF what we want
+        - A = V0, accessible as tet_volumes[tet_idx]
+        - miu = mu, lmbd = lambda
+        - dPhi_D_dF = ?
 */
-glm::vec3 Mesh::computeForces(size_t v_idx, float dt) {
-    // We can assume uniform for now, but not ideal TODO: add per vertex mass buffer
-    //float m_i = mass / (float)cur_positions.size();
-    float m_i = mass;
-    glm::vec3 f_i_inertia = (m_i / (dt * dt)) * (cur_positions[v_idx] - y[v_idx]);
+void Mesh::computeElasticEnergyGradients(size_t v_idx, size_t tet_idx, glm::vec3& force, glm::mat3& hessian) {
+    std::array<int, 4>& tet = tetrahedra[tet_idx];
+    int v0(tet[0]), v1(tet[1]), v2(tet[2]), v3(tet[3]);
+    float V0 = tet_volumes[tet_idx];
+
+    glm::vec3 x0 = cur_positions[v0];
+    glm::vec3 x1 = cur_positions[v1];
+    glm::vec3 x2 = cur_positions[v2];
+    glm::vec3 x3 = cur_positions[v3];
+
+    // 4.2 https://animation.rwth-aachen.de/media/papers/2014-CAG-PBER.pdf 
+    // Deformed shape matrix Ds and constant shape reference
+    glm::mat3 Ds = glm::mat3(x0 - x3, x1 - x3, x2 - x3);
+    const glm::mat3& Dm_i = Dm_inverses[tet_idx];
     
-    // Iterate over nearby tetrahedra (ones that are attached to vertex v_idx) for elastic forces
-    glm::vec3 f_i_elastic(0.0f);
+    // Compute F = Ds * Dm^-1
+    glm::mat3 F = Ds * Dm_i;
+    if (fabs(glm::determinant(F)) < FLOAT_EPS) {
+        return;
+    }
+    
+    glm::mat3 F_t = glm::transpose(F);
+    glm::mat3 F_it = glm::transpose(glm::inverse(F));
+    float I3 = glm::determinant(F);
 
-    const vector<int>& neighbors = vertex2tets[v_idx];
-    for (size_t tet_idx : neighbors) {
-        f_i_elastic += computeEnergyFirstOrder(v_idx, tet_idx);
+    // Piola-Kirchhoff stress tensor
+    auto P = (mu * F) - (mu * F_it) + (lambda * log(I3) * F_it);
+
+    // Es WRT x1 = VP(F)Dm^-T
+    glm::mat3 Es = V0 * P * glm::transpose(Dm_i);
+
+    // Equation 6 
+
+    if (v_idx == v0) {
+        force -= Es[0];
+    }
+    else if (v_idx == v1) {
+        force -= Es[1];
+    }
+    else if (v_idx == v2) {
+        force -= Es[2];
+    }
+    else if (v_idx == v3) {
+        force += Es[0] + Es[1] + Es[2];
     }
 
-    return -f_i_inertia - f_i_elastic;
+    /*
+        Hessian nightmare
+    */
+
+    glm::mat3 dP_dF = mu * glm::mat3(1.0f) 
+                - mu * glm::inverse(F) 
+                + lambda * (log(I3) * glm::mat3(1.0f) + (1.0f / I3) * glm::inverse(F));
+    hessian += dP_dF * Dm_i;    
 }
 
-glm::mat3 Mesh::computeHessian(size_t v_idx, float dt) {
-    //float m_i = mass / (float)cur_positions.size();
-    float m_i = mass;
-    glm::mat3 H_i_inertia = (m_i / (dt * dt)) * glm::mat3(1.0f);
-
-    // Second term is the sum of Hessians of the force elements wrt v_idx
-    glm::mat3 H_i_elastic(0.0f);
-
-    const vector<int>& neighbors = vertex2tets[v_idx];
-    for (size_t tet_idx : neighbors) {
-        // TODO: If this is too complex, use an approximation of energy = (mu + lambda) * V0
-        H_i_elastic += computeEnergySecondOrder(v_idx, tet_idx);
-        // H_i_elastic += (mu + lambda) * tet_volumes[tet_idx] * glm::mat3(1.0f);
-    }
-
-    return H_i_inertia + H_i_elastic;
-}
-
+// TODO: Pass in inversed dt and dtdt to reduce overhead
 void Mesh::doVBDCPU(float dt) {
     // Could substep this if needed?
 
@@ -109,22 +107,43 @@ void Mesh::doVBDCPU(float dt) {
 
         #pragma omp parallel for
         for (size_t i = start; i < end; i++) {
-            // f_i is the total forces acting on the vertex
-            glm::vec3 f_i = computeForces(i, dt);
+            /*
+                f_i (8) and H_i (9)
 
-            // H_i is the Hessian of G_i 
-            glm::mat3 H_i = computeHessian(i, dt);
+                phi(x_i) is the energy function, which includes inertia forces, elastic, and external
 
-            // Solve for delta_x_i = -H_i^-1 * f_i
-            float det_H_i = glm::determinant(H_i);
-            if (std::abs(det_H_i) < FLOAT_EPS) {
-                H_i += FLOAT_EPS * glm::mat3(1.0f);
+                f_i is -grad(phi(x_i)) which describes the direction vertex i should move to reduce energy.
+
+                H_i is grad^2(phi(x_i)) which describes how the forces acting on vertex i change when we
+                displace them. This can be used to calculate delta_x_i to optimally move the each vertex
+                of the tetrahedron to reduce this gradient of variational energy psi(x_i), or achieve a
+                state where grad(psi(x_i)) == 0.
+            */
+            // Start with inertia
+            // TODO: Add per-vertex mass buffer to Mesh.h or do uniform distro
+            glm::vec3 f_i = - (mass / (dt * dt)) * (cur_positions[i] - y[i]);
+            glm::mat3 H_i = (mass / (dt * dt)) * glm::mat3(1.0f);
+
+            // Add elastic term now 
+            const vector<int>& neighbors = vertex2tets[i];
+            glm::vec3 f_i_elastic(0.0f);
+            glm::mat3 H_i_elastic(0.0f);
+            for (size_t tet_idx : neighbors) {
+                computeElasticEnergyGradients(i, tet_idx, f_i_elastic, H_i_elastic);
             }
 
-            glm::vec3 delta_x_i = -glm::inverse(H_i) * f_i;
-            
-            // Perform optional line search, for now idk
-            x_new[i] = cur_positions[i] + delta_x_i;
+            f_i += f_i_elastic;
+            H_i += H_i_elastic;
+
+            // Solve for delta_x_i = -H_i^-1 * f_i
+            if (fabs(glm::determinant(H_i)) > FLOAT_EPS) {
+                const glm::vec3 delta_x_i = glm::inverse(H_i) * f_i;
+
+                x_new[i] = cur_positions[i] + delta_x_i;
+            }
+            else {
+                x_new[i] = cur_positions[i];
+            }
         }
 
         // Update the positions
@@ -196,8 +215,41 @@ void Mesh::initialGuess(float dt, const glm::vec3& a_ext) {
 void Mesh::updateVelocities(float dt) {
     for (size_t i = 0; i < cur_velocities.size(); i++) {
         prev_velocities[i] = cur_velocities[i];
-
         cur_velocities[i] = (cur_positions[i] - prev_positions[i]) / dt;
+    }
+}
+
+void Mesh::writeToVTK(const string& output_dir, bool raw) {
+    vtkSmartPointer<vtkPoints> vtk_points = vtkSmartPointer<vtkPoints>::New();
+    for (const auto& pos : cur_positions) {
+        vtk_points->InsertNextPoint(pos.x, pos.y, pos.z);
+    }
+
+    vtkSmartPointer<vtkCellArray> vtk_cells = vtkSmartPointer<vtkCellArray>::New();
+    for (const auto& tet : tetrahedra) {
+        vtkSmartPointer<vtkTetra> vtkTet = vtkSmartPointer<vtkTetra>::New();
+        vtkTet->GetPointIds()->SetId(0, tet[0]);
+        vtkTet->GetPointIds()->SetId(1, tet[1]);
+        vtkTet->GetPointIds()->SetId(2, tet[2]);
+        vtkTet->GetPointIds()->SetId(3, tet[3]);
+        vtk_cells->InsertNextCell(vtkTet);
+    }
+    
+    vtkSmartPointer<vtkUnstructuredGrid> vtk_mesh = vtkSmartPointer<vtkUnstructuredGrid>::New();
+    vtk_mesh->SetPoints(vtk_points);
+    vtk_mesh->SetCells(VTK_TETRA, vtk_cells);
+
+    if (raw) {
+        vtkSmartPointer<vtkUnstructuredGridWriter> raw_writer = vtkSmartPointer<vtkUnstructuredGridWriter>::New();
+        raw_writer->SetFileName(output_dir.substr(0, output_dir.size() - 4).append("_raw.vtu").c_str());
+        raw_writer->SetInputData(vtk_mesh);
+        raw_writer->Write();
+    }
+    else {
+        vtkSmartPointer<vtkXMLUnstructuredGridWriter> writer = vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
+        writer->SetFileName(output_dir.c_str());
+        writer->SetInputData(vtk_mesh);
+        writer->Write();
     }
 }
 
@@ -272,7 +324,7 @@ void Mesh::initFromVTK(const string& vtk_file) {
         vtkTetra* tet = vtkTetra::SafeDownCast(cell);
 
         if (tet) {
-            std::array<int, 4> tet_idx;
+            array<int, 4> tet_idx;
             for (int j = 0; j < 4; j++) {
                 tet_idx[j] = tet->GetPointIds()->GetId(j);
             }
@@ -373,7 +425,7 @@ void Mesh::initFromVTK(const string& vtk_file) {
     Dm_inverses.resize(tetrahedra.size());
     tet_volumes.resize(tetrahedra.size());
     for (int i = 0; i < tetrahedra.size(); i++) {
-        const std::array<int, 4>& tet = tetrahedra[i];
+        const array<int, 4>& tet = tetrahedra[i];
 
         glm::vec3 x0 = init_positions[tet[0]];
         glm::vec3 x1 = init_positions[tet[1]];
@@ -382,17 +434,16 @@ void Mesh::initFromVTK(const string& vtk_file) {
 
         // Dm is the reference shape matrix, which is defined by the three edge vectors
         glm::mat3 Dm;
-        Dm[0] = x1 - x0;
-        Dm[1] = x2 - x0;
-        Dm[2] = x3 - x0;
+        Dm[0] = x0 - x3;
+        Dm[1] = x1 - x3;
+        Dm[2] = x2 - x3;
 
         Dm_inverses[i] = glm::inverse(Dm);
 
-        float vol = glm::determinant(Dm) / 6.0f;
-        // if (fabsf(vol) < FLOAT_EPS) {
-        //     cout << "Degenerate tetrahedron " << i << " has zero volume, exiting" << endl;
-        //     throw std::runtime_error("Degenerate tetrahedron detected");
-        // }
+        float vol = fabs(glm::determinant(Dm) / 6.0f);
+        if (fabs(vol) < FLOAT_EPS) {
+            cout << "Degenerate tetrahedron " << i << " has zero volume" << endl;
+        }
         tet_volumes[i] = vol;
     }
 
@@ -412,7 +463,7 @@ void Mesh::initFromVTK(const string& vtk_file) {
         color_freq[i] = (float)color_groups[i].size();
     }
 
-    cout << "Ideal vertices per group = " << ((float)num_vertices / color_groups.size()) << " versus actual: ";
+    cout << "Theoretical even vertices per group (not necessarily ideal) = " << ((float)num_vertices / color_groups.size()) << " versus actual: ";
     for (int i = 0; i < color_freq.size(); i++) {
         cout << color_freq[i] << " ";
     }

@@ -4,8 +4,8 @@
             "name": "Scene 1",
             "meshes": [
                 {
-                    "name": "dragon",
-                    "file": "dragon_simplified_colored.vtk",
+                    "name": "dillo",
+                    "file": "armadillo_colored.vtk",
                     "params": {
                         "position": [0, 0, 0],
                         "rotation": [0, 0, 0],
@@ -24,7 +24,7 @@
             "properties": {
                 "gravity": [0, -9.8, 0],
                 "solver": {
-                    "h": 0.00333333333333,
+                    "h": 0.2,
                     "iterations": 10
                 }
             }
