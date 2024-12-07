@@ -7,6 +7,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 #include <Eigen/Dense>
+#include <Eigen/IterativeLinearSolvers>
 
 // https://examples.vtk.org/site/Cxx/
 #include <vtk-9.3/vtkSmartPointer.h>
@@ -21,12 +22,246 @@
 #include <vtk-9.3/vtkTetra.h>
 
 #include <TinyAD/VectorFunction.hh>
+#include <TinyAD/Utils/NewtonDecrement.hh>
 #include <TinyAD/ScalarFunction.hh>
 #include <TinyAD/Scalar.hh>
 
 using std::cout, std::cerr, std::endl, std::string, std::vector, std::array, std::ifstream;
 using json = nlohmann::json;
 
+// // https://github.com/patr-schm/TinyAD-Examples/blob/main/apps/deformation.cc
+// // https://github.com/patr-schm/TinyAD?tab=readme-ov-file
+// // https://www.graphics.rwth-aachen.de/media/papers/341/TinyAD_lowres.pdf
+// void Mesh::computeElasticEnergyGradients(int v_idx, Eigen::Vector3f& f_i_elastic, Eigen::Matrix3f& H_i_elastic) {
+//     const std::vector<int>& neighbors = vertex2tets[v_idx];
+
+//     // ! We have to use doubles for TinyAD (AFAIK)
+//     TinyAD::ScalarFunction<3> energy_func;
+//     auto x = energy_func.add_variable("x", cur_positions[v_idx].cast<double>());
+
+//     for (const int& tet_idx : neighbors) {
+//         const auto& tet = tetrahedra[tet_idx];
+
+//         Eigen::Vector3d x0 = cur_positions[tet[0]].cast<double>();
+//         Eigen::Vector3d x1 = cur_positions[tet[1]].cast<double>();
+//         Eigen::Vector3d x2 = cur_positions[tet[2]].cast<double>();
+//         Eigen::Vector3d x3 = cur_positions[tet[3]].cast<double>();
+
+//         // Get deformation matrix F = Ds * Dm^-1
+//         Eigen::Matrix3d Dm_inv = Dm_inverses[tet_idx].cast<double>();
+//         Eigen::Matrix3d Ds;
+//         Ds.col(0) = x1 - x0;
+//         Ds.col(1) = x2 - x0;
+//         Ds.col(2) = x3 - x0;
+//         Eigen::Matrix3d F = Ds * Dm_inv;
+
+//         Eigen::Matrix3d E = 0.5 * (F.transpose() * F - Eigen::Matrix3d::Identity());
+//         double energy = 0.5 * lambda * E.trace() * E.trace() + mu * E.squaredNorm();
+
+//         energy_func += energy;
+//     }
+
+//     // Compute the gradient and Hessian
+//     Eigen::Vector3d grad = energy_func.gradient(x);
+//     Eigen::Matrix3d hess = energy_func.hessian(x);
+
+//     f_i_elastic = -Eigen::Vector3f(grad.cast<float>());
+//     H_i_elastic = hess.cast<float>();
+// }
+
+void Mesh::assembleVertexVForceAndHessian(const Eigen::Matrix<float, 9, 1>& dE_dF,
+                                    const Eigen::Matrix<float, 9, 9>& d2E_dF_dF,
+                                    float m1, float m2, float m3,
+                                    Eigen::Vector3f& force, Eigen::Matrix3f& h) {
+    float A1 = dE_dF(0);
+    float A2 = dE_dF(1);
+    float A3 = dE_dF(2);
+    float A4 = dE_dF(3);
+    float A5 = dE_dF(4);
+    float A6 = dE_dF(5);
+    float A7 = dE_dF(6);
+    float A8 = dE_dF(7);
+    float A9 = dE_dF(8);
+
+    force << A1 * m1 + A4 * m2 + A7 * m3,
+             A2 * m1 + A5 * m2 + A8 * m3,
+             A3 * m1 + A6 * m2 + A9 * m3;
+    
+    Eigen::Matrix<float, 3, 9> HL;
+
+    HL.row(0) = d2E_dF_dF.row(0) * m1 + d2E_dF_dF.row(3) * m2 + d2E_dF_dF.row(6) * m3;
+	HL.row(1) = d2E_dF_dF.row(1) * m1 + d2E_dF_dF.row(4) * m2 + d2E_dF_dF.row(7) * m3;
+	HL.row(2) = d2E_dF_dF.row(2) * m1 + d2E_dF_dF.row(5) * m2 + d2E_dF_dF.row(8) * m3;
+
+	h.col(0) = HL.col(0) * m1 + HL.col(3) * m2 + HL.col(6) * m3;
+	h.col(1) = HL.col(1) * m1 + HL.col(4) * m2 + HL.col(7) * m3;
+	h.col(2) = HL.col(2) * m1 + HL.col(5) * m2 + HL.col(8) * m3;
+}
+
+void Mesh::computeElasticEnergyGradients(float dt, size_t v_idx, size_t tet_idx,
+                                         Eigen::Vector3f& force, Eigen::Matrix3f& hessian) {
+    const std::array<int, 4> tet = tetrahedra[tet_idx];
+    float a = 1 + mu / lambda;
+    float A = tet_volumes[tet_idx];
+    Eigen::Vector3f displacement = cur_positions[v_idx] - prev_positions[v_idx];
+    
+    Eigen::Vector3f x0 = cur_positions[tet[0]];
+    Eigen::Vector3f x1 = cur_positions[tet[1]];
+    Eigen::Vector3f x2 = cur_positions[tet[2]];
+    Eigen::Vector3f x3 = cur_positions[tet[3]];
+
+    Eigen::Matrix3f Dm_inv = Dm_inverses[tet_idx];
+    Eigen::Matrix3f Ds;
+    Ds.col(0) = x1 - x0;
+    Ds.col(1) = x2 - x0;
+    Ds.col(2) = x3 - x0;
+    Eigen::Matrix3f F = Ds * Dm_inv;
+
+    float detF = F.determinant();
+    // if (detF < FLOAT_EPS) {
+    //     return;
+    // }
+
+    Eigen::Map<Eigen::Matrix<float, 9, 1>> dPhi_D_dF(F.data());
+
+    // void GAIA::VBDTetMeshNeoHookean::accumlateMaterialForceAndHessian2(int iV, Vec3& force, Mat3& hessian)
+    float F1_1 = F(0, 0);
+    float F2_1 = F(1, 0);
+    float F3_1 = F(2, 0);
+    float F1_2 = F(0, 1);
+    float F2_2 = F(1, 1);
+    float F3_2 = F(2, 1);
+    float F1_3 = F(0, 2);
+    float F2_3 = F(1, 2);
+    float F3_3 = F(2, 2);
+
+    Eigen::Matrix<float, 9, 1> ddetF_dF;
+    ddetF_dF << F2_2 * F3_3 - F2_3 * F3_2,
+                F1_3* F3_2 - F1_2 * F3_3,
+                F1_2* F2_3 - F1_3 * F2_2,
+                F2_3* F3_1 - F2_1 * F3_3,
+                F1_1* F3_3 - F1_3 * F3_1,
+                F1_3* F2_1 - F1_1 * F2_3,
+                F2_1* F3_2 - F2_2 * F3_1,
+                F1_2* F3_1 - F1_1 * F3_2,
+                F1_1* F2_2 - F1_2 * F2_1;
+
+    Eigen::Matrix<float, 9, 9> d2E_dF_dF = ddetF_dF * ddetF_dF.transpose();
+
+    float k = detF - a;
+    d2E_dF_dF(0, 4) += k * F3_3;
+    d2E_dF_dF(4, 0) += k * F3_3;
+    d2E_dF_dF(0, 5) += k * -F2_3;
+    d2E_dF_dF(5, 0) += k * -F2_3;
+    d2E_dF_dF(0, 7) += k * -F3_2;
+    d2E_dF_dF(7, 0) += k * -F3_2;
+    d2E_dF_dF(0, 8) += k * F2_2;
+    d2E_dF_dF(8, 0) += k * F2_2;
+
+    d2E_dF_dF(1, 3) += k * -F3_3;
+    d2E_dF_dF(3, 1) += k * -F3_3;
+    d2E_dF_dF(1, 5) += k * F1_3;
+    d2E_dF_dF(5, 1) += k * F1_3;
+    d2E_dF_dF(1, 6) += k * F3_2;
+    d2E_dF_dF(6, 1) += k * F3_2;
+    d2E_dF_dF(1, 8) += k * -F1_2;
+    d2E_dF_dF(8, 1) += k * -F1_2;
+
+    d2E_dF_dF(2, 3) += k * F2_3;
+    d2E_dF_dF(3, 2) += k * F2_3;
+    d2E_dF_dF(2, 4) += k * -F1_3;
+    d2E_dF_dF(4, 2) += k * -F1_3;
+    d2E_dF_dF(2, 6) += k * -F2_2;
+    d2E_dF_dF(6, 2) += k * -F2_2;
+    d2E_dF_dF(2, 7) += k * F1_2;
+    d2E_dF_dF(7, 2) += k * F1_2;
+
+    d2E_dF_dF(3, 7) += k * F3_1;
+    d2E_dF_dF(7, 3) += k * F3_1;
+    d2E_dF_dF(3, 8) += k * -F2_1;
+    d2E_dF_dF(8, 3) += k * -F2_1;
+
+    d2E_dF_dF(4, 6) += k * -F3_1;
+    d2E_dF_dF(6, 4) += k * -F3_1;
+    d2E_dF_dF(4, 8) += k * F1_1;
+    d2E_dF_dF(8, 4) += k * F1_1;
+
+    d2E_dF_dF(5, 6) += k * F2_1;
+    d2E_dF_dF(6, 5) += k * F2_1;
+    d2E_dF_dF(5, 7) += k * -F1_1;
+    d2E_dF_dF(7, 5) += k * -F1_1;
+
+    d2E_dF_dF *= lambda;
+
+    Eigen::Matrix<float, 9, 1> dE_dF = A * (mu * dPhi_D_dF + lambda * (detF - a) * ddetF_dF);
+
+    float DmInv1_1 = Dm_inv(0, 0);
+    float DmInv2_1 = Dm_inv(1, 0);
+    float DmInv3_1 = Dm_inv(2, 0);
+    float DmInv1_2 = Dm_inv(0, 1);
+    float DmInv2_2 = Dm_inv(1, 1);
+    float DmInv3_2 = Dm_inv(2, 1);
+    float DmInv1_3 = Dm_inv(0, 2);
+    float DmInv2_3 = Dm_inv(1, 2);
+    float DmInv3_3 = Dm_inv(2, 2);
+
+    // TODO: I don't think I need this?
+    // int vertedTetVId = getVertexNeighborTetVertexOrder(v_idx, tet_idx);
+
+    // I believe this is calculated from https://animation.rwth-aachen.de/media/papers/2014-CAG-PBER.pdf
+    Eigen::Matrix<float, 9, 3> dF_dxi;
+    Eigen::Vector3f dE_dxi;
+    Eigen::Matrix3f d2E_dxi_dxi;
+    float m1, m2, m3;
+
+    if (v_idx == tet[0]) {
+        m1 = -DmInv1_1 - DmInv2_1 - DmInv3_1;
+        m2 = -DmInv1_2 - DmInv2_2 - DmInv3_2;
+        m3 = -DmInv1_3 - DmInv2_3 - DmInv3_3;
+    }
+    else if (v_idx == tet[1]) {
+        m1 = DmInv1_1;
+        m2 = DmInv1_2;
+        m3 = DmInv1_3;
+    }
+    else if (v_idx == tet[2]) {
+        m1 = DmInv2_1;
+        m2 = DmInv2_2;
+        m3 = DmInv2_3;
+    }
+    else if (v_idx == tet[3]) {
+        m1 = DmInv3_1;
+        m2 = DmInv3_2;
+        m3 = DmInv3_3;
+    }
+
+    // TODO: Idk about these
+    float dampingHydrostatic = detF - 1;
+    float dampingDeviatoric = (F.transpose() * F).trace() - 3;
+
+    assembleVertexVForceAndHessian(dE_dF, d2E_dF_dF, m1, m2, m3, dE_dxi, d2E_dxi_dxi);
+    Eigen::Matrix3f dampingH = d2E_dxi_dxi * dampingHydrostatic;
+    float tmp = (m1 * m1 + m2 * m2 + m3 * m3) * mu * A;
+    d2E_dxi_dxi(0, 0) += tmp;
+    d2E_dxi_dxi(1, 1) += tmp;
+    d2E_dxi_dxi(2, 2) += tmp;
+    tmp *= dampingDeviatoric;
+    dampingH(0, 0) += tmp;
+    dampingH(1, 1) += tmp;
+    dampingH(2, 2) += tmp;
+    dampingH /= dt;
+    Eigen::Vector3f dampingForce = dampingH * displacement;
+    
+    // if (v_idx == 0) {
+    //     printvec3(dE_dxi);
+    //     printvec3(dampingForce);
+    // }
+
+    force -= dE_dxi + dampingForce;
+    hessian += d2E_dxi_dxi + dampingH;
+}
+
+bool seen=true;
 void Mesh::doVBDCPU(float dt) {
     float inv_dt = 1.0f / dt;
     float inv_dtdt = inv_dt * inv_dt;
@@ -50,17 +285,29 @@ void Mesh::doVBDCPU(float dt) {
             Eigen::Vector3f f_i_elastic = Eigen::Vector3f::Zero();
             Eigen::Matrix3f H_i_elastic = Eigen::Matrix3f::Zero();
 
-            // We want to optimize this vertex update across all connected tetrahedra with TinyAD
-
-            // const vector<int>& neighbors = vertex2tets[i];
-            // for (const int& tet_idx : neighbors) {
-            // }
+            const vector<int>& neighbors = vertex2tets[i];
+            for (const int& tet_idx : neighbors) {
+                computeElasticEnergyGradients(dt, i, tet_idx, f_i_elastic, H_i_elastic);
+            }
 
             f_i += f_i_elastic;
             H_i += H_i_elastic;
 
             if (H_i.determinant() > FLOAT_EPS) {
-                const Eigen::Vector3f delta_xi = -H_i.inverse() * f_i;
+                const Eigen::Vector3f delta_xi = H_i.inverse() * f_i;
+
+                if (i == 0 && seen) {
+                    seen = false;
+                    printvec3(f_i);
+                    printmat3(H_i);
+                    printvec3(delta_xi);
+                }
+
+                // if (i == 0) {
+                //     printvec3(f_i);
+                //     printmat3(H_i);
+                //     printvec3(delta_xi);
+                // }
 
                 x_new[i] = cur_positions[i] + delta_xi;
             }
@@ -87,7 +334,7 @@ void Mesh::doVBDCPU(float dt) {
 //     for (size_t c = 0; c < color_ranges.size(); c++) { // lol c++
 //         size_t start(color_ranges[c][0]), end(color_ranges[c][1]);
 
-//         #pragma omp parallel for
+//         // #pragma omp parallel for
 //         for (size_t i = start; i < end; i++) {
 //             /*
 //                 f_i (8) and H_i (9)
@@ -95,33 +342,66 @@ void Mesh::doVBDCPU(float dt) {
 
 //             Eigen::Vector3f f_i = - (mass * inv_dtdt) * (cur_positions[i] - y[i]);
 //             Eigen::Matrix3f H_i = (mass * inv_dtdt) * Eigen::Matrix3f::Identity();
-
-//             // Accumulate elastic contributions from all tetrahedra neighboring the current vertex
-//             Eigen::Vector3f f_i_elastic = Eigen::Vector3f::Zero();
-//             Eigen::Matrix3f H_i_elastic = Eigen::Matrix3f::Zero();
+            
+//             /*
+//                 https://github.com/patr-schm/TinyAD-Examples/blob/main/apps/deformation.cc
+//                 We only have one vertex, the current one.
+//             */
+//             auto func = TinyAD::scalar_function<3>(TinyAD::range(1));
 
 //             const vector<int>& neighbors = vertex2tets[i];
-//             for (const int& tet_idx : neighbors) {
-//                 computeElasticEnergyGradients(dt, i, tet_idx, f_i_elastic, H_i_elastic);
+//             func.add_elements<1>(TinyAD::range(1), [&](auto& element) -> TINYAD_SCALAR_TYPE(element) {
+//                 using T = TINYAD_SCALAR_TYPE(element);
+//                 int t_idx = neighbors[element.handle];
+//                 const auto& tet = tetrahedra[t_idx];
+//                 Eigen::Vector3<T> x0 = cur_positions[tet[0]].cast<T>();
+//                 Eigen::Vector3<T> x1 = cur_positions[tet[1]].cast<T>();
+//                 Eigen::Vector3<T> x2 = cur_positions[tet[2]].cast<T>();
+//                 Eigen::Vector3<T> x3 = cur_positions[tet[3]].cast<T>();
+//                 Eigen::Matrix3<T> Ds = TinyAD::col_mat(x1 - x0, x2 - x0, x3 - x0);
+//                 if (Ds.determinant() <= 0.0) {
+//                     return (T)INFINITY;
+//                 }
+
+//                 // Compute energy based on tetrahedron volume and deformation stage
+//                 Eigen::Matrix3d Dm_inv = Dm_inverses[t_idx].cast<double>();
+//                 Eigen::Matrix3<T> F = Ds * Dm_inv;
+//                 float vol = tet_volumes[t_idx];
+
+//                 return vol * (mu * 0.5 * (F.transpose() * F - Eigen::Matrix3<T>::Identity()).squaredNorm() + lambda * 0.5 * (F.trace() - 3.0) * (F.trace() - 3.0));
+//             });
+
+//             Eigen::VectorXd x = func.x_from_data([&] (int v_idx) { return cur_positions[v_idx].cast<double>(); });
+
+//             /*
+//                 Compute gradient and Hessian
+                
+//                 eval_with_hessian_proj ->a
+//                     PassiveT f
+//                     Eigen::VectorX<PassiveT> g
+//                     Eigen::SparseMatrix<PassiveT> H_proj
+
+//                 There is no inverse, because it would require transforming H_proj to a dense matrix,
+//                 so we can use a sparse solver. I will use Eigen/ConjugateGradient
+//             */
+
+//             auto [f, g, H_proj] = func.eval_with_hessian_proj(x);
+//             Eigen::ConjugateGradient<Eigen::SparseMatrix<double>> cg_solver;
+//             cg_solver.setTolerance(1e-6);
+//             cg_solver.compute(H_proj);
+//             if (cg_solver.info() != Eigen::Success) {
+//                 cerr << "failed decompositon" << endl;
+//                 continue;
 //             }
 
-//             f_i += f_i_elastic;
-//             H_i += H_i_elastic;
+//             Eigen::VectorX<double> delta_x = cg_solver.solve(-g);
 
-//             if (H_i.determinant() > FLOAT_EPS) {
-//                 const Eigen::Vector3f delta_xi = -H_i.inverse() * f_i;
-
-//                 x_new[i] = cur_positions[i] + delta_xi;
-//             }
-//             else {
-//                 x_new[i] = cur_positions[i];
-//             }
+//             x_new[i] = (cur_positions[i].cast<double>() + delta_x.segment<3>(0)).cast<float>();
 //         }
 
 //         // Update the positions
 //         #pragma omp parallel for
 //         for (int i = start; i < end; i++) {
-//             prev_positions[i] = cur_positions[i];
 //             cur_positions[i] = x_new[i];
 //         }
 //     }
@@ -179,17 +459,19 @@ void Mesh::initialGuess(float dt, const Eigen::Vector3f& a_ext) {
         #pragma omp parallel for
         for (size_t i = 0; i < num_vertices; i++) {
             // y = x = x_t + hv_t + h^2a_ext
-            y[i] = cur_positions[i] + (dt * cur_velocities[i]) + (dt * dt * a_ext);
+            y[i] = prev_positions[i] + (dt * prev_velocities[i]) + (dt * dt * a_ext);
             cur_positions[i] = y[i];
+            prev_velocities[i] = cur_velocities[i];
         }
     }
 }
 
 void Mesh::updateVelocities(float dt) {
     float inv_dt = 1.0f / dt;
+    #pragma omp parallel for
     for (size_t i = 0; i < cur_velocities.size(); i++) {
-        prev_velocities[i] = cur_velocities[i];
         cur_velocities[i] = (cur_positions[i] - prev_positions[i]) * inv_dt;
+        prev_positions[i] = cur_positions[i];
     }
 }
 

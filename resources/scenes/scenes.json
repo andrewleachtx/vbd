@@ -7,13 +7,13 @@
                     "name": "dillo",
                     "file": "armadillo_colored.vtk",
                     "params": {
-                        "position": [0, 0, 0],
+                        "position": [0, 3, 0],
                         "rotation": [0, 0, 0],
                         "velocity": [0, -0.2, 0],
                         "scale": [1, 1, 1],
                         "mass": 1,
-                        "mu": 2e6,
-                        "lambda": 1e7,
+                        "mu": 2e5,
+                        "lambda": 1e6,
                         "damping": 1e-6,
                         "k_c": 1e7,
                         "mu_c": 0.2,
@@ -24,8 +24,8 @@
             "properties": {
                 "gravity": [0, -9.8, 0],
                 "solver": {
-                    "h": 0.05,
-                    "iterations": 10
+                    "h": 0.016666666666666666,
+                    "iterations": 100
                 }
             }
         }

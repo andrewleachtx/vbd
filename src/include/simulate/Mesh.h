@@ -56,15 +56,14 @@ class Mesh {
 
         initGuessEnum initGuessType;
 
-        // void assembleVertexVForceAndHessian(const Eigen::Matrix<float, 9, 1>& dE_dF,
-        //                                     const Eigen::Matrix<float, 9, 9>& d2E_dF,
-        //                                     float m1, float m2, float m3,
-        //                                     Eigen::Matrix<float, 3, 1>& force,
-        //                                     Eigen::Matrix<float, 3, 3>& h);
-        // void computeElasticEnergyGradients(float dt, size_t v_idx, size_t tet_idx,
-        //                                    Eigen::Matrix<float, 3, 1> &force,
-        //                                    Eigen::Matrix<float, 3, 3> &hessian);
+        void assembleVertexVForceAndHessian(const Eigen::Matrix<float, 9, 1>& dE_dF,
+                                            const Eigen::Matrix<float, 9, 9>& d2E_dF_dF,
+                                            float m1, float m2, float m3,
+                                            Eigen::Vector3f& force, Eigen::Matrix3f& h);
+        void computeElasticEnergyGradients(float dt, size_t v_idx, size_t tet_idx,
+                                         Eigen::Vector3f& force, Eigen::Matrix3f& hessian);
 
+        void computeElasticEnergyGradients(int v_idx, Eigen::Vector3f& f_i_elastic, Eigen::Matrix3f& H_i_elastic);
         void doVBDCPU(float dt);
 
         void initialGuess(float dt, const Eigen::Vector3f& a);
