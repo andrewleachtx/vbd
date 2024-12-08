@@ -185,16 +185,12 @@ void PhysicsScene::stepCPU() {
 */
 void PhysicsScene::simulate() {
     // TODO: Move max_frames to attribute
-    int max_frames(100);
+    int max_frames(500);
 
-    // Perturb one tetrahedra
-    meshes[0].prev_positions[0] += 0.01f * randXYZ();
-    // int tet_idx = meshes[0].vertex2tets[0][0];
-    // std::array<int, 4>& tet = meshes[0].tetrahedra[tet_idx];
-    // meshes[0].prev_positions[tet[0]] += 0.01f * randXYZ();
-    // meshes[0].prev_positions[tet[2]] += 0.01f * randXYZ();
-    // meshes[0].prev_positions[tet[3]] += 0.01f * randXYZ();    
-    // meshes[0].prev_positions[tet[1]] += 0.01f * randXYZ();
+    // Perturb tetrahedra
+    for (size_t i = 0; i < meshes[0].prev_positions.size(); i++) {
+        meshes[0].prev_positions[i] += 10.0f * randXYZ();
+    }
 
     while (++frame < max_frames) {
         string filename = state_output_dir + "/frame_" + std::to_string(frame) + ".vtu";

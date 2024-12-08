@@ -5,7 +5,7 @@
             "meshes": [
                 {
                     "name": "dillo",
-                    "file": "armadillo_colored.vtk",
+                    "file": "Beam_1_colored.vtk",
                     "params": {
                         "position": [0, 3, 0],
                         "rotation": [0, 0, 0],
@@ -24,7 +24,7 @@
             "properties": {
                 "gravity": [0, -9.8, 0],
                 "solver": {
-                    "h": 0.016666666666666666,
+                    "h": 0.003333333333333,
                     "iterations": 100
                 }
             }

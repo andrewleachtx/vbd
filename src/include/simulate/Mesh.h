@@ -63,7 +63,6 @@ class Mesh {
         void computeElasticEnergyGradients(float dt, size_t v_idx, size_t tet_idx,
                                          Eigen::Vector3f& force, Eigen::Matrix3f& hessian);
 
-        void computeElasticEnergyGradients(int v_idx, Eigen::Vector3f& f_i_elastic, Eigen::Matrix3f& H_i_elastic);
         void doVBDCPU(float dt);
 
         void initialGuess(float dt, const Eigen::Vector3f& a);
