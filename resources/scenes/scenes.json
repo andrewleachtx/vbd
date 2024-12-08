@@ -10,10 +10,10 @@
                         "position": [0, 3, 0],
                         "rotation": [0, 0, 0],
                         "velocity": [0, 0, 0],
-                        "scale": [1, 1, 1],
+                        "scale": [1.5, 1.5, 1.5],
                         "mass": 1,
-                        "mu": 3e6,
-                        "lambda": 3e7,
+                        "mu": 2e6,
+                        "lambda": 1e7,
                         "damping": 1e-6,
                         "k_c": 1e7,
                         "mu_c": 0.2,
@@ -24,7 +24,7 @@
             "properties": {
                 "gravity": [0, 0, 0],
                 "solver": {
-                    "h": 0.01666666666,
+                    "h": 0.001,
                     "iterations": 100
                 }
             }

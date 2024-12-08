@@ -62,9 +62,7 @@ void Mesh::computeElasticEnergyGradients(float dt, size_t v_idx, size_t tet_idx,
                                          Eigen::Vector3f& force, Eigen::Matrix3f& hessian) {
     const std::array<int, 4> tet = tetrahedra[tet_idx];
     float a = 1 + mu / lambda;
-    float A = tet_volumes[tet_idx];
-    Eigen::Vector3f displacement = cur_positions[v_idx] - prev_positions[v_idx];
-    
+    float A = tet_volumes[tet_idx];    
     Eigen::Vector3f x0 = cur_positions[tet[0]];
     Eigen::Vector3f x1 = cur_positions[tet[1]];
     Eigen::Vector3f x2 = cur_positions[tet[2]];
@@ -78,13 +76,9 @@ void Mesh::computeElasticEnergyGradients(float dt, size_t v_idx, size_t tet_idx,
     Eigen::Matrix3f F = Ds * Dm_inv;
 
     float detF = F.determinant();
-    // if (detF < FLOAT_EPS) {
-    //     return;
-    // }
 
     Eigen::Map<Eigen::Matrix<float, 9, 1>> dPhi_D_dF(F.data());
 
-    // void GAIA::VBDTetMeshNeoHookean::accumlateMaterialForceAndHessian2(int iV, Vec3& force, Mat3& hessian)
     float F1_1 = F(0, 0);
     float F2_1 = F(1, 0);
     float F3_1 = F(2, 0);
@@ -207,38 +201,22 @@ void Mesh::computeElasticEnergyGradients(float dt, size_t v_idx, size_t tet_idx,
         m3 = DmInv3_3;
     }
 
-    // TODO: Idk about these
-    // float dampingHydrostatic = detF - 1;
-    // float dampingDeviatoric = (F.transpose() * F).trace() - 3;
-    float dampingHydrostatic = 0.0f;
-    float dampingDeviatoric = 0.0f;
-
     assembleVertexVForceAndHessian(dE_dF, d2E_dF_dF, m1, m2, m3, dE_dxi, d2E_dxi_dxi);
-    Eigen::Matrix3f dampingH = d2E_dxi_dxi * dampingHydrostatic;
-    float tmp = (m1 * m1 + m2 * m2 + m3 * m3) * mu * A;
-    d2E_dxi_dxi(0, 0) += tmp;
-    d2E_dxi_dxi(1, 1) += tmp;
-    d2E_dxi_dxi(2, 2) += tmp;
-    tmp *= dampingDeviatoric;
-    dampingH(0, 0) += tmp;
-    dampingH(1, 1) += tmp;
-    dampingH(2, 2) += tmp;
-    dampingH /= dt;
-    Eigen::Vector3f dampingForce = dampingH * displacement;
 
-    // "Toggle" dampingforce on/off
-    dampingForce = Eigen::Vector3f::Zero();
-    dampingH = Eigen::Matrix3f::Zero();
+    /*
+        Damping term
 
-    // if (v_idx == 0) {
-    //     printvec3(dE_dxi);
-    //     printmat3(d2E_dxi_dxi);
-    //     printvec3(dampingForce);
-    //     printmat3(dampingH);
-    // }
-    
-    force -= dE_dxi + dampingForce;
-    hessian += d2E_dxi_dxi + dampingH;
+        f_i -= (kd / h) * (d2E_dxi_dxi) * (x_i - xt_i)
+        H_i += (kd / h) * (d2E_dxi_dxi)
+    */
+
+    // auto f_i_damping = (damping / dt) * (d2E_dxi_dxi * (cur_positions[v_idx] - y[v_idx]));
+    // auto H_i_damping = (damping / dt) * d2E_dxi_dxi;
+    auto f_i_damping = Eigen::Vector3f::Zero();
+    auto H_i_damping = Eigen::Matrix3f::Zero();
+
+    force -= (dE_dxi + f_i_damping);
+    hessian += (d2E_dxi_dxi + H_i_damping);
 }
 
 void Mesh::doVBDCPU(float dt) {
@@ -262,27 +240,22 @@ void Mesh::doVBDCPU(float dt) {
             Eigen::Matrix3f H_i = (m_i * inv_dtdt) * Eigen::Matrix3f::Identity();
 
             // Accumulate elastic contributions from all tetrahedra neighboring the current vertex
-            Eigen::Vector3f f_i_elastic = Eigen::Vector3f::Zero();
-            Eigen::Matrix3f H_i_elastic = Eigen::Matrix3f::Zero();
+            // Eigen::Vector3f f_i_elastic = Eigen::Vector3f::Zero();
+            // Eigen::Matrix3f H_i_elastic = Eigen::Matrix3f::Zero();
 
             const vector<int>& neighbors = vertex2tets[i];
             for (const int& tet_idx : neighbors) {
-                computeElasticEnergyGradients(dt, i, tet_idx, f_i_elastic, H_i_elastic);
+                computeElasticEnergyGradients(dt, i, tet_idx, f_i, H_i);
             }
 
-            f_i += f_i_elastic;
-            H_i += H_i_elastic;
+            // f_i += f_i_elastic;
+            // H_i += H_i_elastic;
 
             if (H_i.determinant() > FLOAT_EPS) {
                 const Eigen::Vector3f delta_xi = H_i.inverse() * f_i;
-
-                // if (i == 0) {
-                //     printvec3(f_i);
-                //     printmat3(H_i);
-                //     printvec3(delta_xi);
-                // }
-
                 x_new[i] = cur_positions[i] + delta_xi;
+
+                bool dog = x_new[i].hasNaN();
             }
             else {
                 x_new[i] = cur_positions[i];
@@ -316,17 +289,24 @@ void Mesh::initialGuess(float dt, const Eigen::Vector3f& a_ext) {
     if (initGuessType == initGuessEnum::ADAPTIVE) {
         float a_ext_mag = a_ext.norm();
         Eigen::Vector3f a_ext_hat = Eigen::Vector3f::Zero();
-        if (a_ext_mag < FLOAT_EPS) {
-            return;
+
+        // Only normalize if there's a meaningful external acceleration
+        if (a_ext_mag > FLOAT_EPS) {
+            a_ext_hat = a_ext / a_ext_mag;
         }
 
-        // We need to compute the initial guess for each vertex
         #pragma omp parallel for
         for (size_t i = 0; i < num_vertices; i++) {
-            // a_t = (v_t - v_{t-1}) / h and compute component along external acceleration direction
+            // Compute the approximate previous frame acceleration
             Eigen::Vector3f a_t = (cur_velocities[i] - prev_velocities[i]) / dt;
-            float a_t_ext = a_t.dot(a_ext_hat);
 
+            // Project this acceleration onto the direction of a_ext
+            float a_t_ext = 0.0f;
+            if (a_ext_mag > FLOAT_EPS) {
+                a_t_ext = a_t.dot(a_ext_hat);
+            }
+
+            // Determine the scaling coefficient
             float a_coef;
             if (a_t_ext > a_ext_mag) {
                 a_coef = 1.0f;
@@ -335,7 +315,7 @@ void Mesh::initialGuess(float dt, const Eigen::Vector3f& a_ext) {
                 a_coef = 0.0f;
             }
             else {
-                a_coef = a_t_ext / a_ext_mag;
+                a_coef = (a_ext_mag > FLOAT_EPS) ? (a_t_ext / a_ext_mag) : 0.0f;
             }
 
             Eigen::Vector3f a_tilde = a_coef * a_ext;
@@ -362,11 +342,33 @@ void Mesh::initialGuess(float dt, const Eigen::Vector3f& a_ext) {
 
 void Mesh::updateVelocities(float dt) {
     float inv_dt = 1.0f / dt;
+
+    const float max_vMag = 10.0f;
+    const float max_vMagSq = max_vMag * max_vMag;
+
     #pragma omp parallel for
     for (size_t i = 0; i < cur_velocities.size(); i++) {
         prev_velocities[i] = cur_velocities[i];
         cur_velocities[i] = (cur_positions[i] - prev_positions[i]) * inv_dt;
+        auto tmp = prev_positions[i];
         prev_positions[i] = cur_positions[i];
+
+        // Damping
+        float v_mag = cur_velocities[i].norm();
+        if (v_mag < FLOAT_EPS) {
+            continue;
+        }
+
+        bool dog = cur_velocities[i].hasNaN();
+
+        // if (cur_velocities[i].hasNaN()) {
+        //     cout << "i = " << i << " with NaN, v_mag: " << v_mag << endl;
+        //     printvec3(cur_velocities[i]);
+        //     printvec3(cur_positions[i]);
+        //     printvec3(tmp);
+        // }
+
+        cur_velocities[i] *= (max_vMag / v_mag);
     }
 }
 
@@ -374,7 +376,7 @@ void Mesh::writeToVTK(const string& output_dir, bool raw) {
     vtkSmartPointer<vtkPoints> vtk_points = vtkSmartPointer<vtkPoints>::New();
     vtk_points->SetDataTypeToFloat();
 
-    for (const auto& pos : cur_positions) {
+    for (const auto& pos : prev_positions) {
         vtk_points->InsertNextPoint(pos.x(), pos.y(), pos.z());
     }
 
@@ -437,6 +439,7 @@ void Mesh::initFromJson(const json& mesh_data) {
 
     // Assume initial guess type is always inertia + accel
     initGuessType = initGuessEnum::INERTIA_ACCEL;
+    initGuessType = initGuessEnum::ADAPTIVE;
 
     std::cout << "Parameters:" << std::endl;
     std::cout << "\tmass: "    << mass    << std::endl;

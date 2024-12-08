@@ -5,9 +5,9 @@ using std::vector, std::string, std::make_shared, std::shared_ptr, std::pair, st
 using std::stoi, std::stoul, std::min, std::max, std::numeric_limits, std::abs;
 
 int main(int argc, char** argv) {
-    // Sanitize and parse inputs. We have ./VBD <resource_dir> <scene_no> <state_output_dir>
-    if (argc != 4) {
-        cerr << "Usage: ./VBD <resource_dir> <scene_no> <state_output_dir>" << endl;
+    // Sanitize and parse inputs. We have ./VBD <resource_dir> <scene_no> <state_output_dir> <use_GPU=true|false>
+    if (argc != 5) {
+        cerr << "Usage: ./VBD <resource_dir> <scene_no> <state_output_dir> <use_GPU=true|false>" << endl;
         cerr << "You entered: ";
         for (int i = 0; i < argc; i++) {
             cerr << argv[i] << " ";
