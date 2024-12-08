@@ -45,6 +45,7 @@ class Mesh {
 
         // Now we have per mesh parameters        
         float mass, mu, lambda, damping, k_c, mu_c, eps_c;
+        Eigen::Vector3f scale;
         Eigen::Vector3f position;
         Eigen::Vector3f velocity;
         bool is_static;

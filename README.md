@@ -39,5 +39,5 @@ The full pipeline starts by adding a `.obj` into `resources/models`, where you c
 
 1. (OPTIONAL) Simplify mesh, reducing vertice count with `python simplify.py <desired_obj> <percent> [resource_dir]` which outputs `models/obj/<desired_objname>_simplified.obj`
 2. Tetrahedralize any obj with `python tetrahedralize.py <desired_obj> [resource_dir]`.
-3. Graph color the tetrahedralized `.vtk` produced in 2 with `python graphcolor.py <desired_vtk> [resource_dir]`, creating `models/vtk/<desired_vtkname>_colored.vtk`.
+3. Graph color the tetrahedralized `.vtk` produced in 2 with `python graphcolor.py <desired_vtk> [resource_dir]`, creating `models/vtk/<desired_vtkname>_c.vtk`.
 4. From here you can add scenes to `scene.json`, and change main.cpp based on the desired scene number. This is not fully tested.

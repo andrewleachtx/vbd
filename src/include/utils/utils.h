@@ -9,8 +9,8 @@
 #include <string>
 using std::string;
 
-float randFloat();
-Eigen::Vector3f randXYZ();
+float randFloat(bool can_negative=false);
+Eigen::Vector3f randXYZ(bool can_negative=false);
 
 // https://stackoverflow.com/questions/14038589/what-is-the-canonical-way-to-check-for-errors-using-the-cuda-runtime-api/14038590#14038590
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }

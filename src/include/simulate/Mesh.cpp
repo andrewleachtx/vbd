@@ -246,7 +246,7 @@ void Mesh::doVBDCPU(float dt) {
     float inv_dtdt = inv_dt * inv_dt;
     size_t num_vertices = cur_positions.size();
     vector<Eigen::Vector3f> x_new(num_vertices, Eigen::Vector3f::Zero());
-    float m_i = mass / num_vertices;
+    float m_i = mass;
 
     // Per color group batch now
     for (size_t c = 0; c < color_ranges.size(); c++) { // lol c++
@@ -309,24 +309,23 @@ void Mesh::doVBDCPU(float dt) {
     After some struggle getting adaptive acceleration working, I have decided to leave it
     but as a parameter of "initGuessType" to choose what you use.
 */
+bool first = true;
 void Mesh::initialGuess(float dt, const Eigen::Vector3f& a_ext) {
     size_t num_vertices = init_positions.size();
 
     if (initGuessType == initGuessEnum::ADAPTIVE) {
         float a_ext_mag = a_ext.norm();
         Eigen::Vector3f a_ext_hat = Eigen::Vector3f::Zero();
-        if (a_ext_mag > FLOAT_EPS) {
-            a_ext_hat = a_ext / a_ext_mag;
+        if (a_ext_mag < FLOAT_EPS) {
+            return;
         }
 
         // We need to compute the initial guess for each vertex
+        #pragma omp parallel for
         for (size_t i = 0; i < num_vertices; i++) {
             // a_t = (v_t - v_{t-1}) / h and compute component along external acceleration direction
             Eigen::Vector3f a_t = (cur_velocities[i] - prev_velocities[i]) / dt;
             float a_t_ext = a_t.dot(a_ext_hat);
-
-            // Update previous pos
-            prev_positions[i] = cur_positions[i];
 
             float a_coef;
             if (a_t_ext > a_ext_mag) {
@@ -340,10 +339,14 @@ void Mesh::initialGuess(float dt, const Eigen::Vector3f& a_ext) {
             }
 
             Eigen::Vector3f a_tilde = a_coef * a_ext;
+            if (first) {
+                a_tilde = a_ext;
+                first = false;
+            }
 
-            // y = x_t + dt * v_t + dt^2 * a_ext
-            y[i] = cur_positions[i] + (dt * cur_velocities[i]) + (dt * dt * a_ext);
-            cur_positions[i] += (dt * cur_velocities[i]) + (dt * dt * a_tilde);
+            // y = x_t + dt * v_t + dt^2 * a_ext no matter what
+            y[i] = prev_positions[i] + (dt * prev_velocities[i]) + (dt * dt * a_ext);
+            cur_positions[i] = prev_positions[i] + (dt * prev_velocities[i]) + (dt * dt * a_tilde);
         }
     }
     else if (initGuessType == initGuessEnum::INERTIA_ACCEL) {
@@ -351,8 +354,8 @@ void Mesh::initialGuess(float dt, const Eigen::Vector3f& a_ext) {
         for (size_t i = 0; i < num_vertices; i++) {
             // y = x = x_t + hv_t + h^2a_ext
             y[i] = prev_positions[i] + (dt * prev_velocities[i]) + (dt * dt * a_ext);
+            prev_positions[i] = cur_positions[i];
             cur_positions[i] = y[i];
-            prev_velocities[i] = cur_velocities[i];
         }
     }
 }
@@ -361,6 +364,7 @@ void Mesh::updateVelocities(float dt) {
     float inv_dt = 1.0f / dt;
     #pragma omp parallel for
     for (size_t i = 0; i < cur_velocities.size(); i++) {
+        prev_velocities[i] = cur_velocities[i];
         cur_velocities[i] = (cur_positions[i] - prev_positions[i]) * inv_dt;
         prev_positions[i] = cur_positions[i];
     }
@@ -413,8 +417,11 @@ void Mesh::initFromJson(const json& mesh_data) {
     mu_c    = mesh_data["params"]["mu_c"].get<float>();
     eps_c   = mesh_data["params"]["eps_c"].get<float>();
 
-    assert(mesh_data["params"]["position"].size() >= 3 && "Position array must have at least 3 elements.");
-    assert(mesh_data["params"]["velocity"].size() >= 3 && "Velocity array must have at least 3 elements.");
+    scale = Eigen::Vector3f(
+        mesh_data["params"]["scale"][0].get<float>(),
+        mesh_data["params"]["scale"][1].get<float>(),
+        mesh_data["params"]["scale"][2].get<float>()
+    );
 
     position = Eigen::Vector3f(
         mesh_data["params"]["position"][0].get<float>(),
@@ -475,6 +482,9 @@ void Mesh::initFromVTK(const string& vtk_file) {
         );
 
         pos += position;
+
+        // scale
+        pos = pos.cwiseProduct(scale);
 
         init_positions.push_back(pos);
 

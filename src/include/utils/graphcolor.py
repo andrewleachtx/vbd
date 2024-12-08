@@ -29,7 +29,7 @@ if RESOURCE_DIR[-1] == "/":
     RESOURCE_DIR = RESOURCE_DIR[:-1]
 
 INPUT_FILE = f"{RESOURCE_DIR}/vtk/{INPUT_VTK}"
-OUTPUT_FILE = f"{RESOURCE_DIR}/vtk/{INPUT_VTK.replace('.vtk', '_colored.vtk')}"
+OUTPUT_FILE = f"{RESOURCE_DIR}/vtk/{INPUT_VTK.replace('.vtk', '_c.vtk')}"
 
 ### MESH LOADING & GRAPH ALGO ###
 mesh = meshio.read(INPUT_FILE)

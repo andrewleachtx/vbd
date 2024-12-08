@@ -187,23 +187,25 @@ void PhysicsScene::simulate() {
     // TODO: Move max_frames to attribute
     int max_frames(500);
 
+    // Perturb
+    float perturb = 2.5f;
     // Perturb tetrahedra
     for (size_t i = 0; i < meshes[0].prev_positions.size(); i++) {
-        meshes[0].prev_positions[i] += 10.0f * randXYZ();
+        meshes[0].prev_positions[i] += perturb * randXYZ(true);
     }
 
     while (++frame < max_frames) {
         string filename = state_output_dir + "/frame_" + std::to_string(frame) + ".vtu";
-
-        cout << "Starting write to " << filename << endl;
-        meshes[0].writeToVTK(filename, false);
-        cout << "Finishing write to " << filename << endl;
 
         auto start = std::chrono::high_resolution_clock::now();
         stepCPU();
         auto stop = std::chrono::high_resolution_clock::now();
         double step_wallTime = std::chrono::duration<double>(stop - start).count();
         cout << "Frame " << frame << " took " << step_wallTime << " seconds" << endl;
+
+        cout << "Starting write to " << filename << endl;
+        meshes[0].writeToVTK(filename, false);
+        cout << "Finishing write to " << filename << endl;
 
         // stepGPU();
     }
