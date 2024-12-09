@@ -7,7 +7,6 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 #include <Eigen/Dense>
-#include <Eigen/IterativeLinearSolvers>
 
 // https://examples.vtk.org/site/Cxx/
 #include <vtk-9.3/vtkSmartPointer.h>
@@ -20,11 +19,6 @@
 #include <vtk-9.3/vtkIntArray.h>
 #include <vtk-9.3/vtkCellArray.h>
 #include <vtk-9.3/vtkTetra.h>
-
-#include <TinyAD/VectorFunction.hh>
-#include <TinyAD/Utils/NewtonDecrement.hh>
-#include <TinyAD/ScalarFunction.hh>
-#include <TinyAD/Scalar.hh>
 
 using std::cout, std::cerr, std::endl, std::string, std::vector, std::array, std::ifstream;
 using json = nlohmann::json;
@@ -171,9 +165,6 @@ void Mesh::computeElasticEnergyGradients(float dt, size_t v_idx, size_t tet_idx,
     float DmInv2_3 = Dm_inv(1, 2);
     float DmInv3_3 = Dm_inv(2, 2);
 
-    // TODO: I don't think I need this?
-    // int vertedTetVId = getVertexNeighborTetVertexOrder(v_idx, tet_idx);
-
     // I believe this is calculated from https://animation.rwth-aachen.de/media/papers/2014-CAG-PBER.pdf
     Eigen::Matrix<float, 9, 3> dF_dxi;
     Eigen::Vector3f dE_dxi;
@@ -240,22 +231,16 @@ void Mesh::doVBDCPU(float dt) {
             Eigen::Matrix3f H_i = (m_i * inv_dtdt) * Eigen::Matrix3f::Identity();
 
             // Accumulate elastic contributions from all tetrahedra neighboring the current vertex
-            // Eigen::Vector3f f_i_elastic = Eigen::Vector3f::Zero();
-            // Eigen::Matrix3f H_i_elastic = Eigen::Matrix3f::Zero();
-
             const vector<int>& neighbors = vertex2tets[i];
             for (const int& tet_idx : neighbors) {
                 computeElasticEnergyGradients(dt, i, tet_idx, f_i, H_i);
             }
 
-            // f_i += f_i_elastic;
-            // H_i += H_i_elastic;
-
             if (H_i.determinant() > FLOAT_EPS) {
                 const Eigen::Vector3f delta_xi = H_i.inverse() * f_i;
                 x_new[i] = cur_positions[i] + delta_xi;
 
-                bool dog = x_new[i].hasNaN();
+                bool bad = x_new[i].hasNan();
             }
             else {
                 x_new[i] = cur_positions[i];

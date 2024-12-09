@@ -17,14 +17,16 @@
 */
 class PhysicsScene {
     public:
-        PhysicsScene(const std::string& resource_dir, int scene_no, const std::string& state_output_dir);
+        PhysicsScene(const std::string& resource_dir, int scene_no, const std::string& state_output_dir,
+                     bool is_usingGPU);
         ~PhysicsScene() {}
 
         void init();
 
         void discreteCollisionDetection();
         void continuousCollisionDetection();
-        void stepCPU();
+        void runStepsGPU();
+        void runStepsCPU();
         void simulate();
 
     private:
@@ -39,6 +41,7 @@ class PhysicsScene {
         float iterations;
 
         size_t frame;
+        bool is_usingGPU;
 };
 
 #endif // PHYSICS_SCENE_H

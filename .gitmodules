@@ -1,3 +1,0 @@
-[submodule "src/include/external/TinyAD"]
-	path = src/include/external/TinyAD
-	url = git@github.com:patr-schm/TinyAD.git

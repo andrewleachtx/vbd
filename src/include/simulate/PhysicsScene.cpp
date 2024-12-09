@@ -9,13 +9,19 @@
 #include "../utils/utils.h"
 #include "Mesh.h"
 
+// CUDA
+#include <cuda_runtime.h>
+#include <device_launch_parameters.h>
+
 using std::cout, std::cerr, std::endl, std::string, std::vector, std::array, std::ifstream;
 using json = nlohmann::json;
 
-PhysicsScene::PhysicsScene(const string& resource_dir, int scene_no, const string& state_output_dir) {
+PhysicsScene::PhysicsScene(const string& resource_dir, int scene_no, const string& state_output_dir,
+                           bool is_usingGPU) {
     this->resource_dir = resource_dir;
     this->scene_no = scene_no;
     this->state_output_dir = state_output_dir;
+    this->is_usingGPU = is_usingGPU;
 }
 
 void PhysicsScene::init() {
@@ -89,7 +95,6 @@ void PhysicsScene::init() {
         - x_a is the colliding vertex and x_b is the corresponding point on the collision point
           for CCD or the closest point for DCD on the triangle's face. n_hat is the surface normal at x_b.
 */
-
 void PhysicsScene::discreteCollisionDetection() {
     // Check between all meshes if there is a vertex-triangle collision
     for (size_t i = 0; i < meshes.size(); i++) {
@@ -101,17 +106,17 @@ void PhysicsScene::discreteCollisionDetection() {
 void PhysicsScene::continuousCollisionDetection() {}
 
 /*
-    Input: 
-        x_t pos of previous step
-        v_t vel of prev step
-        a_ext external acceleration (gravity for now)
-    
-    Output: this step's position & velocity x_t+1, v_t+1 (not really an output cause void)
+    For simplicity I will be using a hybrid approach that requires memcpy'ing around information
+    and using kernels and transfers where the copy is cheaper than the computation.
+
+    TODO: Do a proper implementation, storing all vertex data in one GPU malloc call. May be
+    TODO: possible to also make one massive global memory alloc call at the start and index
+    TODO: according to the mesh we are using. This would help a lot with the cudaMalloc call
+    TODO: per mesh 
 */
-void PhysicsScene::stepCPU() {
+void PhysicsScene::runStepsGPU() {
     int max_substeps(1);
     float sim_dt = dt / max_substeps;
-    // scenes.json "h": 0.00333333333333
 
     for (int substep = 0; substep < max_substeps; substep++) {
         // Do discrete collision detection
@@ -163,17 +168,42 @@ void PhysicsScene::stepCPU() {
             // parallel for each vertex i do (update x_i using Eqn 18)
         for (int iter = 0; iter < iterations; iter++) {
             for (Mesh& mesh : meshes) {
-                // string filename = state_output_dir + "/frame_" + std::to_string(frame++) + ".vtu";
+                mesh.doVBDGPU(sim_dt);
+                // mesh.doVBDCPU(sim_dt);
+            }
+        }
 
-                // cout << "Starting write to " << filename << endl;
-                // mesh.writeToVTK(filename);
-                // cout << "Finishing write to " << filename << endl;
+        for (Mesh& mesh : meshes) {
+            mesh.updateVelocities(sim_dt);
+        }
+    }
+}
 
+/*
+    Input: 
+        x_t pos of previous step
+        v_t vel of prev step
+        a_ext external acceleration (gravity for now)
+    
+    Output: this step's position & velocity x_t+1, v_t+1 (not really an output cause void)
+*/
+void PhysicsScene::runStepsCPU() {
+    int max_substeps(1);
+    float sim_dt = dt / max_substeps;
+    // scenes.json "h": 0.00333333333333
+
+    for (int substep = 0; substep < max_substeps; substep++) {
+        for (Mesh& mesh : meshes) {
+            mesh.initialGuess(sim_dt, gravity);
+        }
+        printvec3(meshes[0].cur_positions[0]);
+
+        for (int iter = 0; iter < iterations; iter++) {
+            for (Mesh& mesh : meshes) {
                 mesh.doVBDCPU(sim_dt);
             }
         }
         
-        // v_t = (x - x_t) / h
         for (Mesh& mesh : meshes) {
             mesh.updateVelocities(sim_dt);
         }
@@ -208,12 +238,12 @@ void PhysicsScene::simulate() {
         cout << "Finishing write to " << filename << endl;
 
         auto start = std::chrono::high_resolution_clock::now();
-        stepCPU();
+        runStepsCPU();
         auto stop = std::chrono::high_resolution_clock::now();
         double step_wallTime = std::chrono::duration<double>(stop - start).count();
         cout << "Frame " << frame << " took " << step_wallTime << " seconds" << endl;
 
-        // stepGPU();
+        // runStepsGPU();
     }
 }
 

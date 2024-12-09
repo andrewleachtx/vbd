@@ -12,18 +12,7 @@
 #include <random>
 #include <string>
 
-// // GLEW / GLFW
-// #define GLEW_STATIC
-// #include <GL/glew.h>
-// #include <GLFW/glfw3.h>
-
-// // GLM //
-// #define GLM_FORCE_RADIANS
-// #include <glm/glm.hpp>
-// #include <glm/gtc/type_ptr.hpp>
-
 // CUSTOM //
-#include "include/utils/MatrixStack.h"
 #include "include/simulate/PhysicsScene.h"
 
 // UTILS //

@@ -7,6 +7,8 @@
 #include <nlohmann/json.hpp>
 #include <Eigen/Dense>
 
+#include <cuda_runtime.h>
+
 using json = nlohmann::json;
 
 class Mesh;
