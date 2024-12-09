@@ -240,7 +240,7 @@ void Mesh::doVBDCPU(float dt) {
                 const Eigen::Vector3f delta_xi = H_i.inverse() * f_i;
                 x_new[i] = cur_positions[i] + delta_xi;
 
-                bool bad = x_new[i].hasNan();
+                bool bad = x_new[i].hasNaN();
             }
             else {
                 x_new[i] = cur_positions[i];

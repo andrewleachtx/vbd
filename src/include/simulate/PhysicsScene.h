@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include "Mesh.h"
+#include "MeshGPU.h"
 
 #include <Eigen/Dense>
 
@@ -22,13 +23,13 @@ class PhysicsScene {
         ~PhysicsScene() {}
 
         void init();
+        void initGPUMeshes();
 
         void discreteCollisionDetection();
         void continuousCollisionDetection();
         void runStepsGPU();
         void runStepsCPU();
         void simulate();
-
     private:
         std::string resource_dir;
         int scene_no;
@@ -36,6 +37,7 @@ class PhysicsScene {
 
         // Our scene applies the same external forces, uses the same timestep, and uses the same number of max iterations
         std::vector<Mesh> meshes;
+        std::vector<MeshGPU> meshesGPU;
         Eigen::Vector3f gravity;
         float dt;
         float iterations;

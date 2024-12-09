@@ -1,80 +1,37 @@
 cmake_minimum_required(VERSION 3.18)
 
-# Name of the project
 include(CheckLanguage)
 PROJECT(VBD LANGUAGES CXX CUDA)
 
 enable_language(CUDA)
 
 set(CMAKE_CUDA_ARCHITECTURES 86)
-set(CMAKE_VERBOSE_MAKEFILE OFF)
-
-# file(GLOB_RECURSE CPP_SOURCES "src/*.cpp")
-# file(GLOB_RECURSE CUDA_SOURCES "src/*.cu")
-# file(GLOB_RECURSE HEADERS "src/*.h")
-# file(GLOB_RECURSE GLSL "resources/*.glsl")
-
-# dont use glob
-file(GLOB CPP_SOURCES "src/include/*.cpp")
-file(GLOB CUDA_SOURCES "src/include/*.cu")
-file(GLOB HEADERS "src/include/*.h")
-
-# Use c++17, CUDA17
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
-
-# Make sure to --expt-relaxed-constexpr, otherwise bad things will happen
-# Use the -G flag with caution. Tends to just break stuff when nvcc compiles...
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr")
 
-# Set the executable.
-add_executable(${PROJECT_NAME} ${CPP_SOURCES} ${CUDA_SOURCES} ${HEADERS} ${GLSL})
+set(CMAKE_VERBOSE_MAKEFILE OFF)
+file(GLOB_RECURSE CPP_SOURCES "src/*.cpp")
+file(GLOB_RECURSE CUDA_SOURCES "src/*.cu")
+file(GLOB_RECURSE HEADERS "src/*.h")
 
-# Packages
-find_package(nlohmann_json CONFIG REQUIRED)
-target_link_libraries(${CMAKE_PROJECT_NAME} nlohmann_json::nlohmann_json)
+# remove main so we can relink later
+list(REMOVE_ITEM CPP_SOURCES "src/main.cpp")
 
-find_package(VTK REQUIRED)
-target_link_libraries(${CMAKE_PROJECT_NAME} ${VTK_LIBRARIES})
+add_library(CUDA_Lib STATIC ${CUDA_SOURCES})
+add_library(CPP_Lib STATIC ${CPP_SOURCES})
 
 find_package(Eigen3 REQUIRED)
-target_link_libraries(${CMAKE_PROJECT_NAME} Eigen3::Eigen)
+target_link_libraries(CUDA_Lib PRIVATE Eigen3::Eigen)
+target_link_libraries(CPP_Lib PRIVATE Eigen3::Eigen)
 
-IF(WIN32)
-	# With prebuilt binaries
-	# Check for 32 vs 64 bit generator
-	IF(NOT CMAKE_CL_64)
-		MESSAGE(STATUS "Using 32Bit")
-		TARGET_LINK_LIBRARIES(${CMAKE_PROJECT_NAME} ${GLEW_DIR}/lib/Release/Win32/glew32s.lib)
-	ELSE()
-		MESSAGE(STATUS "Using 64Bit")
-		TARGET_LINK_LIBRARIES(${CMAKE_PROJECT_NAME} ${GLEW_DIR}/lib/Release/x64/glew32s.lib)
-	ENDIF()
-ELSE()
-	TARGET_LINK_LIBRARIES(${CMAKE_PROJECT_NAME} ${GLEW_DIR}/lib/libGLEW.a)
-ENDIF()
+find_package(nlohmann_json CONFIG REQUIRED)
+target_link_libraries(CUDA_Lib PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(CPP_Lib PUBLIC nlohmann_json::nlohmann_json)
 
-# Use c++17
-SET_TARGET_PROPERTIES(${CMAKE_PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
-SET_TARGET_PROPERTIES(${CMAKE_PROJECT_NAME} PROPERTIES LINKER_LANGUAGE CXX)
-SET_TARGET_PROPERTIES(${CMAKE_PROJECT_NAME} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+find_package(VTK REQUIRED)
+target_link_libraries(CPP_Lib PRIVATE ${VTK_LIBRARIES})
 
-# OS specific options and libraries
-IF(WIN32)
-	# -Wall produces way too many warnings.
-	# -pedantic is not supported.
-	# Disable warning 4996.
-	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4996")
-	TARGET_LINK_LIBRARIES(${CMAKE_PROJECT_NAME} opengl32.lib)
-	SET_PROPERTY(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
-ELSE()
-	# Enable all pedantic warnings.
-	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic")
-	IF(APPLE)
-		# Add required frameworks for GLFW.
-		TARGET_LINK_LIBRARIES(${CMAKE_PROJECT_NAME} "-framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo")
-	ELSE()
-		#Link the Linux OpenGL library
-		TARGET_LINK_LIBRARIES(${CMAKE_PROJECT_NAME} "GL")
-	ENDIF()
-ENDIF()
+# Link both into the main executable
+add_executable(${PROJECT_NAME} src/main.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE CUDA_Lib CPP_Lib)

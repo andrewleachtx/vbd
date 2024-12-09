@@ -12,6 +12,7 @@
 // CUDA
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
+#include "MeshGPU.h"
 
 using std::cout, std::cerr, std::endl, std::string, std::vector, std::array, std::ifstream;
 using json = nlohmann::json;
@@ -76,6 +77,26 @@ void PhysicsScene::init() {
 }
 
 /*
+    Make one call at the start so we don't have to do it each step
+*/
+void PhysicsScene::initGPUMeshes() {
+    meshesGPU.clear();
+    meshesGPU.reserve(meshes.size());
+
+    for (const Mesh& mesh : meshes) {
+        MeshGPU gpu_mesh;
+        meshesGPU.push_back(gpu_mesh);
+
+        float inv_dt = 1.0f / dt;
+        float inv_dtdt = inv_dt * inv_dt;
+        float m_i = mesh.mass;
+
+        SimConstants h_simconsts = { dt, inv_dt, inv_dtdt, m_i, mesh.mu, mesh.lambda, mesh.damping, mesh.k_c, mesh.mu_c, mesh.eps_c };
+        meshesGPU[meshesGPU.size() - 1].allocGPUMem(mesh.prev_positions.size(), h_simconsts);
+    } 
+}
+
+/*
     CCD and DCD // TODO: Move to a collision.h + .cpp
 
     Based on penetration depth d, s.t.
@@ -118,6 +139,12 @@ void PhysicsScene::runStepsGPU() {
     int max_substeps(1);
     float sim_dt = dt / max_substeps;
 
+    if (meshesGPU.size() == 0) {
+        initGPUMeshes();
+    }
+
+    assert(meshesGPU.size() == meshes.size());
+
     for (int substep = 0; substep < max_substeps; substep++) {
         // Do discrete collision detection
         // discreteCollisionDetection();
@@ -133,43 +160,17 @@ void PhysicsScene::runStepsGPU() {
             mesh.initialGuess(sim_dt, gravity);
         }
         printvec3(meshes[0].cur_positions[0]);
-        // cout << "Done with initial guess!" << endl;
 
-        // for iter in max iterations
-            // if n mod n_collision // TODO: add n_col to physics_scene then perform CCD with x
-
-            // for each vertex color / group c
-                // parallel for each vertex i in color c
-                    // parallel for each j in F_i => we can avoid the SUM( ... ) below by doing it and joining later 
-                        /*
-                            This part is more involved with Hessian, see VBDSolveParallelGroup_allInOne_kernel_V2
-
-                            f_i = - d(G_i(x)) / d(x_i)) = - (m_i / h^2) * (x_i - y_i) - SUM( d(E_j(x)) / d(x_i) )
-                            H_i (3x3) = d2(G_i(x)) / d(x_i)d(x_i) = (m_i / h^2) * I + SUM( d2(E_j(x)) / d(x_i)d(x_i) )
-
-                        */
-                        // f_ij = - d(Ej)/d(x_i)
-                        // H_ij = d2(E_j)/[d(x_i)d(x_i)]
-                    
-                    // join reduction sums
-                    // f_i = SUM_j (f_ij)
-                    // H_i = SUM_j (H_ij)
-
-                    // Solve for delta_x_i = -H_i^-1 * f_i
-                    // Perform optional line search, but idk for now + paper said it was eh
-                    // x_i_new = x_i + delta_x_i
-
-                // Because x_i_new is an external buffer so other colors don't trip:
-                // parallel for each vertex i in color c do
-                    // x_i = x_i_new
-            
-
-            // Optionally, you can use the "accelerated" iteration
-            // parallel for each vertex i do (update x_i using Eqn 18)
         for (int iter = 0; iter < iterations; iter++) {
-            for (Mesh& mesh : meshes) {
-                mesh.doVBDGPU(sim_dt);
-                // mesh.doVBDCPU(sim_dt);
+            /*
+                Now we assume each gpu mesh has been alloc'd before the step, now each timestep
+                all we need to do is copy over, launch kernel, and copy back (the copy is in
+                VBDGPU as I pass mesh by reference
+            */
+
+            for (size_t i = 0; i < meshesGPU.size(); i++) {
+                meshesGPU[i].copyToGPU(meshes[i]);
+                meshesGPU[i].doVBDGPU(dt, meshes[i]);
             }
         }
 
@@ -246,4 +247,3 @@ void PhysicsScene::simulate() {
         // runStepsGPU();
     }
 }
-

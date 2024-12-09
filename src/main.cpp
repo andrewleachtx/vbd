@@ -1,4 +1,5 @@
 #include "include.h"
+#include "include/simulate/PhysicsScene.h"
 
 using std::cout, std::cerr, std::endl;
 using std::vector, std::string, std::make_shared, std::shared_ptr, std::pair, std::array, std::tuple;

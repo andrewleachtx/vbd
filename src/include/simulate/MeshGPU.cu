@@ -1,5 +1,6 @@
 #include "MeshGPU.h"
 
+#include "Mesh.h"
 #include "../utils/utils.h"
 
 #include <iostream>
@@ -127,24 +128,6 @@ __host__ void MeshGPU::doVBDGPU(float dt, Mesh& mesh) {
     vector<Eigen::Vector3f> x_new(num_vertices, Eigen::Vector3f::Zero());
     float m_i = mesh.mass;
 
-    /*
-        1) Allocate memory on device
-        2) Copy host->device
-        3) Launch kernels
-        4) Copy device->host
-    */
-    // (1)
-
-    SimConstants h_simconsts = { dt, inv_dt, inv_dtdt, m_i, mesh.mu, mesh.lambda, mesh.damping, mesh.k_c, mesh.mu_c, mesh.eps_c };
-
-    allocGPUMem(num_vertices, h_simconsts);
-
-    // (2)
-    copyToGPU(mesh);
-
-    // (3)
-
     
 
-    
 };
