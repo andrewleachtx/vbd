@@ -4,7 +4,7 @@
             "name": "Scene 1",
             "meshes": [
                 {
-                    "file": "teapot.vtk",
+                    "file": "teapot_c.vtk",
                     "params": {
                         "position": [0, 3, 0],
                         "rotation": [0, 0, 0],
@@ -23,8 +23,8 @@
             "properties": {
                 "gravity": [0, 0, 0],
                 "solver": {
-                    "h": 0.0166666666667,
-                    "iterations": 10
+                    "h": 0.00166666666666666,
+                    "iterations": 100
                 }
             }
         },

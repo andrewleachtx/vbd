@@ -52,6 +52,8 @@ class Mesh {
         Eigen::Vector3f velocity;
         bool is_static;
 
+        float omega;
+
         enum initGuessEnum {
             INERTIA_ACCEL,
             ADAPTIVE

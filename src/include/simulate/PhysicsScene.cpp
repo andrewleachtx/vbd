@@ -193,14 +193,32 @@ void PhysicsScene::runStepsCPU() {
     float sim_dt = dt / max_substeps;
     // scenes.json "h": 0.00333333333333
 
+    float rho = 0.95f;
+
     for (int substep = 0; substep < max_substeps; substep++) {
         for (Mesh& mesh : meshes) {
             mesh.initialGuess(sim_dt, gravity);
         }
         printvec3(meshes[0].cur_positions[0]);
 
+        // Use omega for accelerated - make sure position update uncomments in Mesh.cpp
+        float omega_cur, omega_prev;
         for (int iter = 0; iter < iterations; iter++) {
+            if (iter == 0) {
+                omega_cur = 1.0f;
+            }
+            else if (iter == 1) {
+                omega_cur = (2.0f / (2.0f - (rho * rho)));
+                omega_prev = 1.0f;
+            }
+            else {
+                float tmp = omega_cur;
+                omega_cur = (4.0f / (4.0f - (rho * rho) * omega_prev));
+                omega_prev = tmp;
+            }
+
             for (Mesh& mesh : meshes) {
+                mesh.omega = omega_cur;
                 mesh.doVBDCPU(sim_dt);
             }
         }
@@ -219,10 +237,10 @@ void PhysicsScene::simulate() {
     int max_frames(600);
 
     // Perturb
-    float perturb = 10.0f;
+    float perturb = 1.0f;
     // Perturb tetrahedra
     for (size_t i = 0; i < meshes[0].prev_positions.size(); i++) {
-        if (i % (meshes[0].prev_positions.size() / 200) == 0) {
+        if (i % (meshes[0].prev_positions.size() / 1) == 0) {
             meshes[0].prev_positions[i] += perturb * randXYZ(true);
         }
     }
@@ -232,13 +250,15 @@ void PhysicsScene::simulate() {
     //     meshes[0].prev_positions[i].y() = 0.0f;
     // }
 
+    int waiting_frames = 89;
+
     // If we want 1.5 seconds of frozen at first with 60 fps let the first 90 frames be subtle
-    // while (++frame < 89) {
-    //     string filename = state_output_dir + "/frame_" + std::to_string(frame) + ".vtu";
-    //     cout << "Starting write to " << filename << endl;
-    //     meshes[0].writeToVTK(filename, false);
-    //     cout << "Finishing write to " << filename << endl;
-    // }
+    while (++frame < waiting_frames) {
+        string filename = state_output_dir + "/frame_" + std::to_string(frame) + ".vtu";
+        cout << "Starting write to " << filename << endl;
+        meshes[0].writeToVTK(filename, false);
+        cout << "Finishing write to " << filename << endl;
+    }
 
     float total = 0.0f;
     while (++frame < max_frames) {
@@ -260,6 +280,6 @@ void PhysicsScene::simulate() {
         total += step_wallTime;
     }
 
-    float avg_fps = (max_frames - 90) / total;
+    float avg_fps = (max_frames - waiting_frames) / total;
     printf("Total walltime was %f, so avg fps = %f and avg time (ms) = %f\n", total, avg_fps, 1000.0f / avg_fps);
 }

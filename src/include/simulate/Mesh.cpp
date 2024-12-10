@@ -141,8 +141,6 @@ void Mesh::computeElasticEnergyGradients(float dt, size_t v_idx, size_t tet_idx,
 
     d2E_dF_dF *= lambda;
 
-    // Or d2E_dF_dF += mu * I_9x9
-
     d2E_dF_dF(0, 0) += mu;
     d2E_dF_dF(1, 1) += mu;
     d2E_dF_dF(2, 2) += mu;
@@ -253,6 +251,8 @@ void Mesh::doVBDCPU(float dt) {
                 There is an "optional" accelerated iteration
             */
 
+            // cur_positions[i] = omega * (x_new[i] - init_positions[i]) + init_positions[i];
+
             cur_positions[i] = x_new[i];
         }
     }
@@ -338,7 +338,7 @@ void Mesh::updateVelocities(float dt) {
     for (size_t i = 0; i < cur_velocities.size(); i++) {
         prev_velocities[i] = cur_velocities[i];
         cur_velocities[i] = (cur_positions[i] - prev_positions[i]) * inv_dt;
-        auto tmp = prev_positions[i];
+        init_positions[i] = prev_positions[i];
         prev_positions[i] = cur_positions[i];
 
         // Damping

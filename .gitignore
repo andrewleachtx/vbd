@@ -22,6 +22,7 @@ cuda-samples/
 
 bench/*.txt
 *.ncu-rep
+docs/demo/
 
 test.py
 
