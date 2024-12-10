@@ -238,18 +238,21 @@ void Mesh::doVBDCPU(float dt) {
 
             if (H_i.determinant() > FLOAT_EPS) {
                 const Eigen::Vector3f delta_xi = H_i.inverse() * f_i;
-                x_new[i] = cur_positions[i] + delta_xi;
 
-                bool bad = x_new[i].hasNaN();
+                x_new[i] = cur_positions[i] + delta_xi;
             }
             else {
                 x_new[i] = cur_positions[i];
             }
         }
-
+        
         // Update the positions
         #pragma omp parallel for
         for (int i = start; i < end; i++) {
+            /*
+                There is an "optional" accelerated iteration
+            */
+
             cur_positions[i] = x_new[i];
         }
     }
@@ -344,55 +347,50 @@ void Mesh::updateVelocities(float dt) {
             continue;
         }
 
-        bool dog = cur_velocities[i].hasNaN();
-
-        // if (cur_velocities[i].hasNaN()) {
-        //     cout << "i = " << i << " with NaN, v_mag: " << v_mag << endl;
-        //     printvec3(cur_velocities[i]);
-        //     printvec3(cur_positions[i]);
-        //     printvec3(tmp);
-        // }
-
         cur_velocities[i] *= (max_vMag / v_mag);
     }
 }
 
-void Mesh::writeToVTK(const string& output_dir, bool raw) {
-    vtkSmartPointer<vtkPoints> vtk_points = vtkSmartPointer<vtkPoints>::New();
-    vtk_points->SetDataTypeToFloat();
+void Mesh::writeToVTK(const std::string &output_dir, bool raw) {
+    auto num_points = static_cast<vtkIdType>(prev_positions.size());
+    auto num_tets = static_cast<vtkIdType>(tetrahedra.size());
 
-    for (const auto& pos : prev_positions) {
-        vtk_points->InsertNextPoint(pos.x(), pos.y(), pos.z());
+    vtkNew<vtkPoints> points;
+    points->SetDataTypeToFloat();
+    points->SetNumberOfPoints(num_points);
+    for (vtkIdType i = 0; i < num_points; i++) {
+        const auto &pos = prev_positions[i];
+        points->SetPoint(i, pos.x(), pos.y(), pos.z());
     }
 
-    vtkSmartPointer<vtkCellArray> vtk_cells = vtkSmartPointer<vtkCellArray>::New();
-    vtk_cells->Allocate(tetrahedra.size());
-    for (const auto& tet : tetrahedra) {
-        vtkSmartPointer<vtkTetra> vtkTet = vtkSmartPointer<vtkTetra>::New();
-        vtkTet->GetPointIds()->SetId(0, tet[0]);
-        vtkTet->GetPointIds()->SetId(1, tet[1]);
-        vtkTet->GetPointIds()->SetId(2, tet[2]);
-        vtkTet->GetPointIds()->SetId(3, tet[3]);
-        vtk_cells->InsertNextCell(vtkTet);
+    vtkNew<vtkCellArray> cells;
+    cells->AllocateEstimate(num_tets, 4);
+    for (auto &tet : tetrahedra) {
+        vtkIdType c[4] = {static_cast<vtkIdType>(tet[0]),
+                          static_cast<vtkIdType>(tet[1]),
+                          static_cast<vtkIdType>(tet[2]),
+                          static_cast<vtkIdType>(tet[3])};
+        cells->InsertNextCell(4, c);
     }
 
-    vtkSmartPointer<vtkUnstructuredGrid> vtk_mesh = vtkSmartPointer<vtkUnstructuredGrid>::New();
-    vtk_mesh->SetPoints(vtk_points);
-    vtk_mesh->SetCells(VTK_TETRA, vtk_cells);
+    vtkNew<vtkUnstructuredGrid> ug;
+    ug->SetPoints(points);
+    ug->SetCells(VTK_TETRA, cells);
 
     if (raw) {
-        vtkSmartPointer<vtkUnstructuredGridWriter> raw_writer = vtkSmartPointer<vtkUnstructuredGridWriter>::New();
-        raw_writer->SetFileName(output_dir.substr(0, output_dir.size() - 4).append("_raw.vtu").c_str());
-        raw_writer->SetInputData(vtk_mesh);
+        std::string raw_fname = output_dir.substr(0, output_dir.size() - 4) + "_raw.vtu";
+        vtkNew<vtkUnstructuredGridWriter> raw_writer;
+        raw_writer->SetFileName(raw_fname.c_str());
+        raw_writer->SetInputData(ug);
         raw_writer->Write();
-    }
-    else {
-        vtkSmartPointer<vtkXMLUnstructuredGridWriter> writer = vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
+    } else {
+        vtkNew<vtkXMLUnstructuredGridWriter> writer;
         writer->SetFileName(output_dir.c_str());
-        writer->SetInputData(vtk_mesh);
+        writer->SetInputData(ug);
         writer->Write();
     }
 }
+
 
 void Mesh::initFromJson(const json& mesh_data) {
     // Extract material and physical parameters from JSON
@@ -422,7 +420,6 @@ void Mesh::initFromJson(const json& mesh_data) {
         mesh_data["params"]["velocity"][2].get<float>()
     );
 
-    // Assume initial guess type is always inertia + accel
     initGuessType = initGuessEnum::INERTIA_ACCEL;
     initGuessType = initGuessEnum::ADAPTIVE;
 
@@ -630,6 +627,8 @@ void Mesh::initFromVTK(const string& vtk_file) {
             printvec3(x1);
             printvec3(x2);
             printvec3(x3);
+
+            throw std::runtime_error("Degenerate tetrahedron from .vtk in initialization");
         }
         tet_volumes[i] = vol;
     }

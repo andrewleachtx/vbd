@@ -92,7 +92,7 @@ void PhysicsScene::initGPUMeshes() {
         float m_i = mesh.mass;
 
         SimConstants h_simconsts = { dt, inv_dt, inv_dtdt, m_i, mesh.mu, mesh.lambda, mesh.damping, mesh.k_c, mesh.mu_c, mesh.eps_c };
-        meshesGPU[meshesGPU.size() - 1].allocGPUMem(mesh.prev_positions.size(), h_simconsts);
+        meshesGPU[meshesGPU.size() - 1].allocGPUMem(mesh, h_simconsts);
     } 
 }
 
@@ -136,7 +136,7 @@ void PhysicsScene::continuousCollisionDetection() {}
     TODO: per mesh 
 */
 void PhysicsScene::runStepsGPU() {
-    int max_substeps(1);
+    int max_substeps(5);
     float sim_dt = dt / max_substeps;
 
     if (meshesGPU.size() == 0) {
@@ -189,7 +189,7 @@ void PhysicsScene::runStepsGPU() {
     Output: this step's position & velocity x_t+1, v_t+1 (not really an output cause void)
 */
 void PhysicsScene::runStepsCPU() {
-    int max_substeps(1);
+    int max_substeps(5);
     float sim_dt = dt / max_substeps;
     // scenes.json "h": 0.00333333333333
 
@@ -216,22 +216,31 @@ void PhysicsScene::runStepsCPU() {
 */
 void PhysicsScene::simulate() {
     // TODO: Move max_frames to attribute
-    int max_frames(500);
+    int max_frames(600);
 
     // Perturb
-    float perturb = 5.0f;
+    float perturb = 10.0f;
     // Perturb tetrahedra
-    // for (size_t i = 0; i < meshes[0].prev_positions.size(); i++) {
-    //     if (i % (meshes[0].prev_positions.size() / 5) == 0) {
-    //         meshes[0].prev_positions[i] += perturb * randXYZ(true);
-    //     }
-    // }
-
-    // Flatten
     for (size_t i = 0; i < meshes[0].prev_positions.size(); i++) {
-        meshes[0].prev_positions[i].y() = 0.0f;
+        if (i % (meshes[0].prev_positions.size() / 200) == 0) {
+            meshes[0].prev_positions[i] += perturb * randXYZ(true);
+        }
     }
 
+    // Flatten
+    // for (size_t i = 0; i < meshes[0].prev_positions.size(); i++) {
+    //     meshes[0].prev_positions[i].y() = 0.0f;
+    // }
+
+    // If we want 1.5 seconds of frozen at first with 60 fps let the first 90 frames be subtle
+    // while (++frame < 89) {
+    //     string filename = state_output_dir + "/frame_" + std::to_string(frame) + ".vtu";
+    //     cout << "Starting write to " << filename << endl;
+    //     meshes[0].writeToVTK(filename, false);
+    //     cout << "Finishing write to " << filename << endl;
+    // }
+
+    float total = 0.0f;
     while (++frame < max_frames) {
         string filename = state_output_dir + "/frame_" + std::to_string(frame) + ".vtu";
         cout << "Starting write to " << filename << endl;
@@ -239,11 +248,18 @@ void PhysicsScene::simulate() {
         cout << "Finishing write to " << filename << endl;
 
         auto start = std::chrono::high_resolution_clock::now();
-        runStepsCPU();
+        if (is_usingGPU) {
+            runStepsGPU();
+        }
+        else {
+            runStepsCPU();
+        }
         auto stop = std::chrono::high_resolution_clock::now();
         double step_wallTime = std::chrono::duration<double>(stop - start).count();
         cout << "Frame " << frame << " took " << step_wallTime << " seconds" << endl;
-
-        // runStepsGPU();
+        total += step_wallTime;
     }
+
+    float avg_fps = (max_frames - 90) / total;
+    printf("Total walltime was %f, so avg fps = %f and avg time (ms) = %f\n", total, avg_fps, 1000.0f / avg_fps);
 }

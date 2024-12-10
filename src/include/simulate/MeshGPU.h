@@ -51,23 +51,16 @@ class MeshGPU {
         __host__ void copyToGPU(const Mesh& mesh);
         __host__ void freeGPUMem();
 
-        // __device__ void assembleVertexVForceAndHessian(const Eigen::Matrix<float, 9, 1>& dE_dF,
-        //                                     const Eigen::Matrix<float, 9, 9>& d2E_dF_dF,
-        //                                     float m1, float m2, float m3,
-        //                                     Eigen::Vector3f& force, Eigen::Matrix3f& h);
-        
-        __global__ void processVerticesKernel(Eigen::Vector3f* d_cur_positions, Eigen::Vector3f* d_prev_positions, Eigen::Vector3f* d_y,
-                                              Eigen::Vector3f* d_cur_velocities, Eigen::Vector3f* d_forces, Eigen::Matrix3f* d_Hessians,
-                                              const SimConstants consts, size_t numVertices,
-                                              int* d_v2tetWindow, int* d_v2tetIdx,
-                                              int* d_tetrahedra, Eigen::Matrix3f* d_Dm_inverses, float* d_tet_volumes,
-                                              size_t start, size_t end);
         __host__ void doVBDGPU(float dt, Mesh& mesh);
 
         Eigen::Vector3f* d_cur_positions;
         Eigen::Vector3f* d_prev_positions;
+        Eigen::Vector3f* d_oldest_positions;
         Eigen::Vector3f* d_y;
         Eigen::Vector3f* d_cur_velocities;
+
+        // This is the additional buffer to write to within calls
+        Eigen::Vector3f* d_x_new;
 
         Eigen::Vector3f* d_forces;
         Eigen::Matrix3f* d_Hessians;

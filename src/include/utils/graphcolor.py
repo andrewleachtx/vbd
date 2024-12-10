@@ -42,6 +42,8 @@ if len(cells) == 0:
     print(f"No tetrahedra were found in {INPUT_VTK}")
     sys.exit(1)
 
+print(f"Loaded vtk with {len(points)} points and {len(cells)} tetrahedra")
+
 # Construct the graph and add a vertex identified by each point
 G = nx.Graph()
 G.add_nodes_from(range(len(points)))

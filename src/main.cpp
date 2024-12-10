@@ -1,6 +1,8 @@
 #include "include.h"
 #include "include/simulate/PhysicsScene.h"
 
+#include <omp.h>
+
 using std::cout, std::cerr, std::endl;
 using std::vector, std::string, std::make_shared, std::shared_ptr, std::pair, std::array, std::tuple;
 using std::stoi, std::stoul, std::min, std::max, std::numeric_limits, std::abs;
@@ -24,6 +26,9 @@ int main(int argc, char** argv) {
     int scene_no = stoi(argv[2]);
     string state_output_dir = argv[3];
     bool is_usingGPU = (string(argv[4]) == "true");
+
+    // OpenMP info
+    cout << "OpenMP threads: " << omp_get_max_threads() << endl;
 
     PhysicsScene physics(resource_dir, scene_no, state_output_dir, is_usingGPU);
     cout << "[STARTING INITIALIZATION (" << (is_usingGPU ? "GPU" : "CPU") << ")" << endl;
