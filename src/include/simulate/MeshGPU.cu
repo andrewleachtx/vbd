@@ -68,8 +68,8 @@ __host__ void MeshGPU::allocGPUMem(const Mesh& mesh, const SimConstants& h_const
         for (size_t i = 0; i < mesh.vertex2tets.size(); i++) {
             r += mesh.vertex2tets[i].size();
 
-            h_v2tetWindow[i] = l;
-            h_v2tetWindow[i + 1] = r;
+            h_v2tetWindow[2 * i] = l;
+            h_v2tetWindow[2 * i + 1] = r;
 
             // populate the actual values
             for (size_t j = 0; j < mesh.vertex2tets[i].size(); j++) {
@@ -420,7 +420,7 @@ __global__ void processVerticesKernel(Eigen::Vector3f* d_cur_positions, Eigen::V
     Eigen::Matrix3f H_i = (d_simConsts.mass * d_simConsts.inv_dtdt) * Eigen::Matrix3f::Identity();
 
     // Too complex to add another layer of parallelization per tetrahedra - for now we will series
-    for (size_t j = d_v2tetWindow[idx]; j < d_v2tetWindow[idx + 1]; j++) {
+    for (size_t j = d_v2tetWindow[2 * idx]; j < d_v2tetWindow[2 * idx + 1]; j++) {
         // Keep in mind tet_idx is the start of 4 indices in d_tetrahedra[tet_idx : tet_idx + 4]
         size_t tet_idx = d_v2tetIdx[j];
 

@@ -228,6 +228,11 @@ void Mesh::doVBDCPU(float dt) {
             Eigen::Vector3f f_i = - (m_i * inv_dtdt) * (cur_positions[i] - y[i]);
             Eigen::Matrix3f H_i = (m_i * inv_dtdt) * Eigen::Matrix3f::Identity();
 
+            // Sometimes they need to be "damped" if the magnitude is great
+            // f_i -= (kd / h) * (d2E_dxi_dxi) * (x_i - xt_i)
+            // f_i -= (damping / dt) * (cur_positions[i] - y[i]);
+            // H_i += (damping / dt) * Eigen::Matrix3f::Identity();
+
             // Accumulate elastic contributions from all tetrahedra neighboring the current vertex
             const vector<int>& neighbors = vertex2tets[i];
             for (const int& tet_idx : neighbors) {
@@ -247,13 +252,11 @@ void Mesh::doVBDCPU(float dt) {
         // Update the positions
         #pragma omp parallel for
         for (int i = start; i < end; i++) {
-            /*
-                There is an "optional" accelerated iteration
-            */
-
+            auto tmp = cur_positions[i];
             // cur_positions[i] = omega * (x_new[i] - init_positions[i]) + init_positions[i];
-
             cur_positions[i] = x_new[i];
+            init_positions[i] = prev_positions[i];
+            prev_positions[i] = tmp;
         }
     }
 }
@@ -338,8 +341,6 @@ void Mesh::updateVelocities(float dt) {
     for (size_t i = 0; i < cur_velocities.size(); i++) {
         prev_velocities[i] = cur_velocities[i];
         cur_velocities[i] = (cur_positions[i] - prev_positions[i]) * inv_dt;
-        init_positions[i] = prev_positions[i];
-        prev_positions[i] = cur_positions[i];
 
         // Damping
         float v_mag = cur_velocities[i].norm();
@@ -347,7 +348,7 @@ void Mesh::updateVelocities(float dt) {
             continue;
         }
 
-        cur_velocities[i] *= (max_vMag / v_mag);
+        // cur_velocities[i] *= (max_vMag / v_mag);
     }
 }
 

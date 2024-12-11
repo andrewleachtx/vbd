@@ -4,14 +4,14 @@
             "name": "Scene 1",
             "meshes": [
                 {
-                    "file": "teapot_c.vtk",
+                    "file": "armadillo_c.vtk",
                     "params": {
                         "position": [0, 3, 0],
                         "rotation": [0, 0, 0],
                         "velocity": [0, 0, 0],
                         "scale": [1.5, 1.5, 1.5],
                         "mass": 1,
-                        "mu": 2e6,
+                        "mu": 2e8,
                         "lambda": 1e7,
                         "damping": 1e-6,
                         "k_c": 1e7,
@@ -23,8 +23,8 @@
             "properties": {
                 "gravity": [0, 0, 0],
                 "solver": {
-                    "h": 0.00166666666666666,
-                    "iterations": 100
+                    "h": 0.016666666667,
+                    "iterations": 10
                 }
             }
         },

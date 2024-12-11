@@ -1,12 +1,52 @@
 # Vertex Block Descent
+My work in progress implementation of a couple scenes using logic from Chen's Vertex Block Descent paper.
 
-## Andrew Leach
+My first major checkpoint in implementation was for a grad physically-based modeling course final project taught by Dr. John Keyser.
 
 ### Sources & References
-- Vertex Block Descent [paper](https://doi.org/10.1145/3658179).
-- Anka Chen's [Gaia](https://github.com/AnkaChan/Gaia) with VBD implemented.
+- Vertex Block Descent [paper](https://doi.org/10.1145/3658179) and project [page](https://graphics.cs.utah.edu/research/projects/vbd/).
+- Anka Chen's [Gaia](https://github.com/AnkaChan/Gaia) engine with VBD implemented.
 
-### Everything Happens in `src/main.cpp`
+### Scenes
+
+I initialized all vertices' y component to zero, and observed the simulation starting after 90 frames.
+<img src="./docs/videos/beam_flat.gif" alt="Flattened Beam" style="width:70%;">
+
+Random initialization of vertices.
+<img src="./docs/videos/beam_random.gif" alt="Randomized Beam" style="width:70%;">
+
+In the multiple attempts and days debugging, my implementation struggled to achieve resolution for more complex, non-uniform meshes. For example, here is one attempt:
+<img src="./docs/videos/teapot_random.gif" alt="Flattened Teapot" style="width:70%;">
+
+And here is the beam just moving around following a randomization. It reminds me of a worm, lol.
+<img src="./docs/videos/beam_moving.gif" alt="Worm Beam" style="width:70%;">
+
+### Everything Starts in `src/main.cpp`
+```
+src
+├── constants.h
+├── include
+│   ├── external
+│   ├── simulate
+│   │   ├── Mesh.cpp 🌟
+│   │   ├── Mesh.h
+│   │   ├── MeshGPU.cu 🌟
+│   │   ├── MeshGPU.h
+│   │   ├── PhysicsScene.cpp 🌟
+│   │   └── PhysicsScene.h
+│   └── utils
+│       ├── anim.py
+│       ├── graphcolor.py
+│       ├── simplifymesh.py
+│       ├── tetrahedralize.py
+│       ├── utils.cpp
+│       ├── utils.h
+│       └── visualize.py
+├── include.h
+└── main.cpp 🌟
+```
+
+The relevant files are starred! Well, all of them are relevant, but these ones I spent the most time in. Things are not of the greatest readability yet.
 
 ### Building
 Dependencies used are
@@ -41,11 +81,16 @@ The full pipeline starts by adding a `.obj` into `resources/models`, where you c
 3. Graph color the tetrahedralized `.vtk` produced in 2 with `python graphcolor.py <desired_vtk> [resource_dir]`, creating `models/vtk/<desired_vtkname>_c.vtk`.
 4. From here you can add scenes to `scene.json`, and change main.cpp based on the desired scene number. This is not fully tested.
 
-# A Note About Eigen
-Here are two sets of results, one from GPU and one from CPU:
-```
-GPU:
+### A Note About Eigen
+Because I had about 24 hours to do it, I wanted to make a naive implementation with CUDA - one that simply used the nvcc compiled Eigen code, as in recent years Eigen has made that possible. Unfortunately for me, this did not play out well and ate up a lot of time debugging. That is on me!
 
+Running the same code once on GPU and CPU, after a few timesteps we can see divergence for what I believe to be numerical error. View if you would like:
+
+<details>
+<summary>Expand for GPU/CPU output</summary>
+
+GPU:
+```
 [INITIALIZATION COMPLETE!]
 [STARTING SIMULATION]
 Starting write to ./output/frame_1.vtu
@@ -62,6 +107,7 @@ d2E_dxi_dxi:
 1014492288.000000, 1835191168.000000, 2760210688.000000
 m1 = -1.666667, m2 = 0.000000, m3 = 0.000000, k = 59.163815
 A = 0.052941, a = 1.200000
+
 f_ij: 188528576.000000, 329807776.000000, 537309312.000000
 H_ij:
 390478144.000000, 694438976.000000, 997900800.000000
@@ -74,18 +120,8 @@ d2E_dxi_dxi:
 -16591513.000000, -60704664.000000, 59465340.000000
 m1 = 0.000000, m2 = 1.152889, m3 = -1.133332, k = 7.935088
 A = 0.079412, a = 1.200000
-f_ij: 193820112.000000, 324714624.000000, 538501376.000000
-H_ij:
-421834880.000000, 665651136.000000, 1003069184.000000
-665651136.000000, 1333712256.000000, 1769318144.000000
-1003069184.000000, 1769318144.000000, 2824172544.000000
-dE_dxi: -5291535.000000, 5093154.500000, -1192062.250000
-d2E_dxi_dxi:
-31356726.000000, -28787820.000000, 5168414.500000
--28787820.000000, 31356698.000000, -5168412.500000
-5168414.500000, -5168412.500000, 3496802.000000
-m1 = 0.000000, m2 = 0.000000, m3 = 1.133334, k = -5.612314
-A = 0.052941, a = 1.200000
+
+...
 
 f_ij: 382094400.000000, 292159968.000000, 730809856.000000
 H_ij:
@@ -99,9 +135,10 @@ d2E_dxi_dxi:
 401548032.000000, -68999448.000000, 412014080.000000
 m1 = -0.424649, m2 = 1.242017, m3 = 0.288761, k = 28.773058
 A = 0.103892, a = 1.200000
+```
 
 CPU:
-
+```
 [INITIALIZATION COMPLETE!]
 [STARTING SIMULATION]
 Starting write to ./output/frame_1.vtu
@@ -118,6 +155,7 @@ d2E_dxi_dxi:
 1014492288.000000, 1835191168.000000, 2760210688.000000
 m1 = -1.666667, m2 = 0.000000, m3 = 0.000000, k = 59.163815
 A = 0.052941, a = 1.200000
+
 force: 188528576.000000, 329807776.000000, 537309312.000000
 hessian:
 390478144.000000, 694438912.000000, 997900800.000000
@@ -130,18 +168,8 @@ d2E_dxi_dxi:
 -16591520.000000, -60704672.000000, 59465376.000000
 m1 = 0.000000, m2 = 1.152889, m3 = -1.133332, k = 7.935088
 A = 0.079412, a = 1.200000
-force: 193820112.000000, 324714624.000000, 538501376.000000
-hessian:
-421834880.000000, 665651072.000000, 1003069248.000000
-665651072.000000, 1333712128.000000, 1769318144.000000
-1003069248.000000, 1769318144.000000, 2824172800.000000
-dE_dxi: -5291536.500000, 5093154.500000, -1192066.000000
-d2E_dxi_dxi:
-31356734.000000, -28787824.000000, 5168434.500000
--28787824.000000, 31356698.000000, -5168431.500000
-5168434.500000, -5168431.500000, 3496808.750000
-m1 = 0.000000, m2 = 0.000000, m3 = 1.133334, k = -5.612315
-A = 0.052941, a = 1.200000
+
+...
 
 force: 382094336.000000, 292159936.000000, 730809792.000000
 hessian:
@@ -156,8 +184,9 @@ d2E_dxi_dxi:
 m1 = -0.424649, m2 = 1.242017, m3 = 0.288761, k = 28.773052
 A = 0.103892, a = 1.200000
 ```
+</details>
 
-<!-- Make a table based on the last two parts for CPU and GPU -->
+Here is a table describing the timestep where things first diverge.
 | variable | CPU | GPU |
 | --- | --- | --- |
 | force | 382094336.000000, 292159936.000000, 730809792.000000 | 382094400.000000, 292159968.000000, 730809856.000000 |
@@ -171,5 +200,17 @@ A = 0.103892, a = 1.200000
 | A | 0.103892 | 0.103892 |
 | a | 1.200000 | 1.200000 |
 
+Observe that the forces fall off here. This was enough for me to make a note about, because although it was cheap using Eigen instead of something else with stricter CUDA support, it is unfortunate to see minor errors caused by operation differences on the GPU vs CPU. At least this is my assumption, it is likely I made an error elsewhere.
 
-Observe that the forces fall off here. This was enough for me to make a note about, because although it was cheap using Eigen instead of something else with stricter CUDA support, it is unfortunate to see minor errors caused by operation differences on the GPU vs CPU.
+### Improvement Focuses
+First off I dived into this with very little understanding of the math behind it, and so that black box made things very complicated. With more time now, I want to go back to understanding theory before I can rewrite the code, as I understand the pitfalls and patterns with my current code.
+
+- [ ] Rewrite CUDA with a library intended for GPU matrix math, like [cuBLAS](https://developer.nvidia.com/cublas)
+- [ ] Work at learning more about math (i.e. hand-deriving the Hessian), so I can formulate the code that calculates it meaningfully
+- [ ] Add the vertex-face and edge-edge collisions, friction, and damping force support, also figure out self-collisions.
+- [ ] Rigid body representation
+- [ ] Cloth simulation
+- [ ] Clearer code outline that I can be proud of
+- [ ] Visually appealing rendering and maybe even real-time interactions
+
+I would say I am very elated to have written code on my keyboard and with the help of modern technology been able to make such an incredible simulation come to life. This is seriously wild to me.

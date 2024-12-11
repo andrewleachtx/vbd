@@ -136,7 +136,7 @@ void PhysicsScene::continuousCollisionDetection() {}
     TODO: per mesh 
 */
 void PhysicsScene::runStepsGPU() {
-    int max_substeps(5);
+    int max_substeps(1);
     float sim_dt = dt / max_substeps;
 
     if (meshesGPU.size() == 0) {
@@ -202,12 +202,9 @@ void PhysicsScene::runStepsCPU() {
         printvec3(meshes[0].cur_positions[0]);
 
         // Use omega for accelerated - make sure position update uncomments in Mesh.cpp
-        float omega_cur, omega_prev;
+        float omega_cur(1.0f), omega_prev;
         for (int iter = 0; iter < iterations; iter++) {
-            if (iter == 0) {
-                omega_cur = 1.0f;
-            }
-            else if (iter == 1) {
+            if (iter == 1) {
                 omega_cur = (2.0f / (2.0f - (rho * rho)));
                 omega_prev = 1.0f;
             }
@@ -237,10 +234,10 @@ void PhysicsScene::simulate() {
     int max_frames(600);
 
     // Perturb
-    float perturb = 1.0f;
+    float perturb = 0.35f;
     // Perturb tetrahedra
     for (size_t i = 0; i < meshes[0].prev_positions.size(); i++) {
-        if (i % (meshes[0].prev_positions.size() / 1) == 0) {
+        if (i % (meshes[0].prev_positions.size() / 10) == 0) {
             meshes[0].prev_positions[i] += perturb * randXYZ(true);
         }
     }
