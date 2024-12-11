@@ -213,4 +213,4 @@ First off I dived into this with very little understanding of the math behind it
 - [ ] Clearer code outline that I can be proud of
 - [ ] Visually appealing rendering and maybe even real-time interactions
 
-I would say I am very elated to have written code on my keyboard and with the help of modern technology been able to make such an incredible simulation come to life. This is seriously wild to me.
+I would say I am very elated to be able to get to this point concluding my introduction to physics for animation modeling. The idea that I can learn and digest information, write words in a funny order on a keyboard, and with the help of modern technology be able to bring such incredible things to life. These numerical outputs, when rendered show something seriously beautiful to me.
