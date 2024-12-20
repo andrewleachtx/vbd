@@ -236,16 +236,20 @@ void PhysicsScene::simulate() {
     // Perturb
     float perturb = 0.35f;
     // Perturb tetrahedra
-    for (size_t i = 0; i < meshes[0].prev_positions.size(); i++) {
-        if (i % (meshes[0].prev_positions.size() / 10) == 0) {
-            meshes[0].prev_positions[i] += perturb * randXYZ(true);
-        }
-    }
+    // for (size_t i = 0; i < meshes[0].prev_positions.size(); i++) {
+    //     if (i % (meshes[0].prev_positions.size() / 10) == 0) {
+    //         meshes[0].prev_positions[i] += perturb * randXYZ(true);
+    //     }
+    // }
 
     // Flatten
     // for (size_t i = 0; i < meshes[0].prev_positions.size(); i++) {
     //     meshes[0].prev_positions[i].y() = 0.0f;
     // }
+
+    for (size_t i = 0; i < meshes[0].prev_positions.size(); i++) {
+        meshes[0].prev_positions[i].z() = 0.0f;
+    }
 
     int waiting_frames = 89;
 
