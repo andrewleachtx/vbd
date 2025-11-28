@@ -28,11 +28,11 @@ src
 ├── include
 │   ├── external
 │   ├── simulate
-│   │   ├── Mesh.cpp 🌟
+│   │   ├── Mesh.cpp
 │   │   ├── Mesh.h
-│   │   ├── MeshGPU.cu 🌟
+│   │   ├── MeshGPU.cu
 │   │   ├── MeshGPU.h
-│   │   ├── PhysicsScene.cpp 🌟
+│   │   ├── PhysicsScene.cpp
 │   │   └── PhysicsScene.h
 │   └── utils
 │       ├── anim.py
@@ -43,10 +43,8 @@ src
 │       ├── utils.h
 │       └── visualize.py
 ├── include.h
-└── main.cpp 🌟
+└── main.cpp
 ```
-
-The relevant files are starred! Well, all of them are relevant, but these ones I spent the most time in. Things are not of the greatest readability yet.
 
 ### Building
 Dependencies used are
@@ -212,5 +210,6 @@ First off I dived into this with very little understanding of the math behind it
 - [ ] Cloth simulation
 - [ ] Clearer code outline that I can be proud of
 - [ ] Visually appealing rendering and maybe even real-time interactions
+
 
 I would say I am very elated to be able to get to this point concluding my introduction to physics for animation modeling. The idea that I can learn and digest information, write words in a funny order on a keyboard, and with the help of modern technology be able to bring such incredible things to life. These numerical outputs, when rendered show something seriously beautiful to me.
